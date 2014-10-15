@@ -16,7 +16,7 @@ LOCAL_PATH := $(call my-dir)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := android-support-multidex
-LOCAL_SDK_VERSION := 11
+LOCAL_SDK_VERSION := 4
 LOCAL_SRC_FILES := $(call all-java-files-under, src)
 
 ifneq "" "$(filter eng.%,$(BUILD_NUMBER))"
