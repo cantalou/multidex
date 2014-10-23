@@ -36,4 +36,9 @@ $(ASMD_VERSION_INTERMEDIATE):
 
 LOCAL_JAVA_RESOURCE_FILES := $(ASMD_VERSION_INTERMEDIATE)
 
+# Use a dir because we have files in subfolders and we want to keep the path into the archive
+#
+# use "resources" instead of "res" because res is already used for packaging the SDK project
+LOCAL_JAVA_RESOURCE_DIRS := resources
+
 include $(BUILD_STATIC_JAVA_LIBRARY)
