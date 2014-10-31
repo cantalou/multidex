@@ -1,5 +1,5 @@
 apply plugin: 'android-library'
-archivesBaseName = 'multidex'
+archivesBaseName = 'multidex-instrumentation'
 
 android {
     compileSdkVersion 4
@@ -19,6 +19,10 @@ android {
     }
 }
 
+dependencies {
+    compile project(':library')
+}
+
 uploadArchives {
     repositories {
         mavenDeployer {
@@ -26,7 +30,7 @@ uploadArchives {
             }
 
             pom.project {
-                name 'Android Multi-Dex Library'
+                name 'Android Multi-Dex Instrumentation Library'
                 description "Library for legacy multi-dex support"
                 url ''
                 inceptionYear '2013'
