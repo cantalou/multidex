@@ -9,8 +9,8 @@ buildscript {
     }
 }
 
-ext.supportVersion = '1.0.0'
-ext.extraVersion = 8
+ext.supportVersion = '1.0.1'
+ext.extraVersion = 10
 ext.supportRepoOut = ''
 ext.buildToolsVersion = '19.0.3'
 
