@@ -334,7 +334,8 @@ final class MultiDexExtractor {
 
         InputStream in = apk.getInputStream(dexFile);
         ZipOutputStream out = null;
-        File tmp = File.createTempFile(extractedFilePrefix, EXTRACTED_SUFFIX,
+        // Temp files must not start with extractedFilePrefix to get cleaned up in prepareDexDir()
+        File tmp = File.createTempFile("tmp-" + extractedFilePrefix, EXTRACTED_SUFFIX,
                 extractTo.getParentFile());
         Log.i(TAG, "Extracting " + tmp.getPath());
         try {
