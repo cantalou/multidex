@@ -19,8 +19,6 @@ package android.support.multidex;
 import android.app.Application;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
-import android.content.pm.PackageManager;
-import android.content.pm.PackageManager.NameNotFoundException;
 import android.os.Build;
 import android.util.Log;
 
@@ -181,13 +179,17 @@ public final class MultiDex {
         Log.i(TAG, "install done");
     }
 
-    private static ApplicationInfo getApplicationInfo(Context context)
-            throws NameNotFoundException {
-        PackageManager pm;
-        String packageName;
+    private static ApplicationInfo getApplicationInfo(Context context) {
         try {
-            pm = context.getPackageManager();
-            packageName = context.getPackageName();
+            /* Due to package install races it is possible for a process to be started from an old
+             * apk even though that apk has been replaced. Querying for ApplicationInfo by package
+             * name may return information for the new apk, leading to a runtime with the old main
+             * dex file and new secondary dex files. This leads to various problems like
+             * ClassNotFoundExceptions. Using context.getApplicationInfo() should result in the
+             * process having a consistent view of the world (even if it is of the old world). The
+             * package install races are eventually resolved and old processes are killed.
+             */
+            return context.getApplicationInfo();
         } catch (RuntimeException e) {
             /* Ignore those exceptions so that we don't break tests relying on Context like
              * a android.test.mock.MockContext or a android.content.ContextWrapper with a null
@@ -197,13 +199,6 @@ public final class MultiDex {
                     "Must be running in test mode. Skip patching.", e);
             return null;
         }
-        if (pm == null || packageName == null) {
-            // This is most likely a mock context, so just return without patching.
-            return null;
-        }
-        ApplicationInfo applicationInfo =
-                pm.getApplicationInfo(packageName, PackageManager.GET_META_DATA);
-        return applicationInfo;
     }
 
     /**
