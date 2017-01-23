@@ -374,7 +374,7 @@ final class MultiDexExtractor {
     /**
      * Returns whether the file is a valid zip file.
      */
-    static boolean verifyZipFile(File file) {
+    private static boolean verifyZipFile(File file) {
         try {
             ZipFile zipFile = new ZipFile(file);
             try {
