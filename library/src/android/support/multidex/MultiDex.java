@@ -23,8 +23,6 @@ import android.content.pm.ApplicationInfo;
 import android.os.Build;
 import android.util.Log;
 
-import dalvik.system.DexFile;
-
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Array;
@@ -40,6 +38,8 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipFile;
+
+import dalvik.system.DexFile;
 
 /**
  * MultiDex patches {@link Context#getClassLoader() the application context class
@@ -512,9 +512,18 @@ public final class MultiDex {
                 ArrayList<IOException> suppressedExceptions)
                         throws IllegalAccessException, InvocationTargetException,
                         NoSuchMethodException {
-            Method makeDexElements =
-                    findMethod(dexPathList, "makeDexElements", ArrayList.class, File.class,
-                            ArrayList.class);
+            Method makeDexElements = null;
+
+            try
+            {
+                makeDexElements = findMethod(dexPathList, "makeDexElements", ArrayList.class, File.class,
+                                ArrayList.class);
+            }
+            catch (NoSuchMethodException e)
+            {
+                Log.w(TAG, "makeDexElements(ArrayList,File,ArrayList) not found in " + dexPathList, e);
+                makeDexElements = findMethod(dexPathList, "makeDexElements", List.class, File.class, List.class);
+            }
 
             return (Object[]) makeDexElements.invoke(dexPathList, files, optimizedDirectory,
                     suppressedExceptions);

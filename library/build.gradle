@@ -17,12 +17,11 @@
 apply plugin: 'com.android.library'
 
 android {
-    compileSdkVersion 4
+    compileSdkVersion 23
+    buildToolsVersion "25.0.2"
 
     defaultConfig {
         minSdkVersion 4
-
-        // Update the version meta-data in Manifest.
         addManifestPlaceholders(["multidex-version": project.rootProject.ext.multidexVersion])
     }
 
@@ -41,36 +40,3 @@ android {
     }
 }
 
-uploadArchives {
-    repositories {
-        mavenDeployer {
-            repository(url: uri(rootProject.ext.supportRepoOut)) {
-            }
-
-            pom.project {
-                name 'Android Multi-Dex Library'
-                description "Library for legacy multi-dex support"
-                url ''
-                inceptionYear '2013'
-
-                licenses {
-                    license {
-                        name 'The Apache Software License, Version 2.0'
-                        url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
-                        distribution 'repo'
-                    }
-                }
-
-                scm {
-                    url "http://source.android.com"
-                    connection "scm:git:https://android.googlesource.com/platform/frameworks/multidex"
-                }
-                developers {
-                    developer {
-                        name 'The Android Open Source Project'
-                    }
-                }
-            }
-        }
-    }
-}
