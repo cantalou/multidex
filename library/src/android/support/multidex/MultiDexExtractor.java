@@ -20,6 +20,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Build;
 import android.util.Log;
+
 import java.io.BufferedOutputStream;
 import java.io.Closeable;
 import java.io.File;
@@ -33,6 +34,13 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -42,6 +50,10 @@ import java.util.zip.ZipOutputStream;
  * directory.
  */
 final class MultiDexExtractor {
+
+    public interface DexAsyncHandler {
+        void handle(File... dexFiles) throws Exception;
+    }
 
     /**
      * Zip file containing one secondary dex file.
@@ -88,13 +100,13 @@ final class MultiDexExtractor {
      * directory.
      *
      * @return a list of files that were created. The list may be empty if there
-     *         are no secondary dex files. Never return null.
+     * are no secondary dex files. Never return null.
      * @throws IOException if encounters a problem while reading or writing
-     *         secondary dex files
+     *                     secondary dex files
      */
     static List<? extends File> load(Context context, File sourceApk, File dexDir,
-            String prefsKeyPrefix,
-            boolean forceReload) throws IOException {
+                                     String prefsKeyPrefix,
+                                     boolean forceReload, DexAsyncHandler dexAsyncHandler) throws IOException {
         Log.i(TAG, "MultiDexExtractor.load(" + sourceApk.getPath() + ", " + forceReload + ", " +
                 prefsKeyPrefix + ")");
 
@@ -119,13 +131,13 @@ final class MultiDexExtractor {
                 } catch (IOException ioe) {
                     Log.w(TAG, "Failed to reload existing extracted secondary dex files,"
                             + " falling back to fresh extraction", ioe);
-                    files = performExtractions(sourceApk, dexDir);
+                    files = performExtractions(sourceApk, dexDir, dexAsyncHandler);
                     putStoredApkInfo(context, prefsKeyPrefix, getTimeStamp(sourceApk), currentCrc,
                             files);
                 }
             } else {
                 Log.i(TAG, "Detected that extraction must be performed.");
-                files = performExtractions(sourceApk, dexDir);
+                files = performExtractions(sourceApk, dexDir, dexAsyncHandler);
                 putStoredApkInfo(context, prefsKeyPrefix, getTimeStamp(sourceApk), currentCrc,
                         files);
             }
@@ -203,7 +215,7 @@ final class MultiDexExtractor {
      * called only while owning the lock on {@link #LOCK_FILENAME}.
      */
     private static boolean isModified(Context context, File archive, long currentCrc,
-            String prefsKeyPrefix) {
+                                      String prefsKeyPrefix) {
         SharedPreferences prefs = getMultiDexPreferences(context);
         return (prefs.getLong(prefsKeyPrefix + KEY_TIME_STAMP, NO_VALUE) != getTimeStamp(archive))
                 || (prefs.getLong(prefsKeyPrefix + KEY_CRC, NO_VALUE) != currentCrc);
@@ -228,7 +240,7 @@ final class MultiDexExtractor {
         return computedValue;
     }
 
-    private static List<ExtractedDex> performExtractions(File sourceApk, File dexDir)
+    private static List<ExtractedDex> performExtractions(File sourceApk, File dexDir, final DexAsyncHandler dexAsyncHandler)
             throws IOException {
 
         final String extractedFilePrefix = sourceApk.getName() + EXTRACTED_NAME_EXT;
@@ -245,52 +257,50 @@ final class MultiDexExtractor {
         try {
 
             int secondaryNumber = 2;
+            ExecutorService executor = Executors.newCachedThreadPool();
+            ArrayList<Future<Void>> taskResult = new ArrayList<>();
 
             ZipEntry dexFile = apk.getEntry(DEX_PREFIX + secondaryNumber + DEX_SUFFIX);
             while (dexFile != null) {
                 String fileName = extractedFilePrefix + secondaryNumber + EXTRACTED_SUFFIX;
-                ExtractedDex extractedFile = new ExtractedDex(dexDir, fileName);
+                final ExtractedDex extractedFile = new ExtractedDex(dexDir, fileName);
                 files.add(extractedFile);
-
-                Log.i(TAG, "Extraction is needed for file " + extractedFile);
-                int numAttempts = 0;
-                boolean isExtractionSuccessful = false;
-                while (numAttempts < MAX_EXTRACT_ATTEMPTS && !isExtractionSuccessful) {
-                    numAttempts++;
-
-                    // Create a zip file (extractedFile) containing only the secondary dex file
-                    // (dexFile) from the apk.
-                    extract(apk, dexFile, extractedFile, extractedFilePrefix);
-
-                    // Read zip crc of extracted dex
-                    try {
-                        extractedFile.crc = getZipCrc(extractedFile);
-                        isExtractionSuccessful = true;
-                    } catch (IOException e) {
-                        isExtractionSuccessful = false;
-                        Log.w(TAG, "Failed to read crc from " + extractedFile.getAbsolutePath(), e);
-                    }
-
-                    // Log size and crc of the extracted zip file
-                    Log.i(TAG, "Extraction " + (isExtractionSuccessful ? "succeeded" : "failed") +
-                            " - length " + extractedFile.getAbsolutePath() + ": " +
-                            extractedFile.length() + " - crc: " + extractedFile.crc);
-                    if (!isExtractionSuccessful) {
-                        // Delete the extracted file
-                        extractedFile.delete();
-                        if (extractedFile.exists()) {
-                            Log.w(TAG, "Failed to delete corrupted secondary dex '" +
-                                    extractedFile.getPath() + "'");
+                if(dexAsyncHandler != null){
+                    final ZipEntry finalDexFile = dexFile;
+                    final int finalSecondaryNumber = secondaryNumber;
+                    Future<Void> result = executor.submit(new Callable<Void>() {
+                        @Override
+                        public Void call() throws Exception{
+                            extractEntry(extractedFilePrefix, apk, finalSecondaryNumber, finalDexFile, extractedFile);
+                            dexAsyncHandler.handle(extractedFile);
+                            return null;
                         }
-                    }
-                }
-                if (!isExtractionSuccessful) {
-                    throw new IOException("Could not create zip file " +
-                            extractedFile.getAbsolutePath() + " for secondary dex (" +
-                            secondaryNumber + ")");
+                    });
+                    taskResult.add(result);
+                }else{
+                    extractEntry(extractedFilePrefix, apk, secondaryNumber, dexFile, extractedFile);
                 }
                 secondaryNumber++;
                 dexFile = apk.getEntry(DEX_PREFIX + secondaryNumber + DEX_SUFFIX);
+            }
+            if(taskResult.size() > 0){
+                executor.shutdown();
+                try {
+                    executor.awaitTermination(Long.MAX_VALUE , TimeUnit.NANOSECONDS);
+                    for(Future<Void> future : taskResult){
+                        future.get();
+                    }
+                } catch (InterruptedException e) {
+                    Log.w(TAG, "Failed to wait for all task competed", e);
+                }catch (ExecutionException e){
+                    Log.w(TAG, "Failed to execute task ", e);
+                    Throwable cause = e.getCause();
+                    if(cause instanceof IOException){
+                        throw (IOException)cause;
+                    }else{
+                        throw new IOException(cause.getMessage());
+                    }
+                }
             }
         } finally {
             try {
@@ -303,12 +313,53 @@ final class MultiDexExtractor {
         return files;
     }
 
+    private static void extractEntry(String extractedFilePrefix, ZipFile apk, int secondaryNumber, ZipEntry dexFile, ExtractedDex extractedFile) throws IOException {
+        Log.i(TAG, "Extraction is needed for file " + extractedFile);
+        int numAttempts = 0;
+        boolean isExtractionSuccessful = false;
+        while (numAttempts < MAX_EXTRACT_ATTEMPTS && !isExtractionSuccessful) {
+            numAttempts++;
+
+            long start = System.currentTimeMillis();
+            // Create a zip file (extractedFile) containing only the secondary dex file
+            // (dexFile) from the apk.
+            extract(apk, dexFile, extractedFile, extractedFilePrefix);
+
+            // Read zip crc of extracted dex
+            try {
+                extractedFile.crc = getZipCrc(extractedFile);
+                isExtractionSuccessful = true;
+            } catch (IOException e) {
+                isExtractionSuccessful = false;
+                Log.w(TAG, "Failed to read crc from " + extractedFile.getAbsolutePath(), e);
+            }
+
+            // Log size and crc of the extracted zip file
+            Log.i(TAG, "Extraction " + (isExtractionSuccessful ? "succeeded" : "failed") +
+                    " time " + (System.currentTimeMillis() - start) + "ms - length " + extractedFile.getAbsolutePath() + ": " +
+                    extractedFile.length() + " - crc: " + extractedFile.crc);
+            if (!isExtractionSuccessful) {
+                // Delete the extracted file
+                extractedFile.delete();
+                if (extractedFile.exists()) {
+                    Log.w(TAG, "Failed to delete corrupted secondary dex '" +
+                            extractedFile.getPath() + "'");
+                }
+            }
+        }
+        if (!isExtractionSuccessful) {
+            throw new IOException("Could not create zip file " +
+                    extractedFile.getAbsolutePath() + " for secondary dex (" +
+                    secondaryNumber + ")");
+        }
+    }
+
     /**
      * Save {@link SharedPreferences}. Should be called only while owning the lock on
      * {@link #LOCK_FILENAME}.
      */
     private static void putStoredApkInfo(Context context, String keyPrefix, long timeStamp,
-            long crc, List<ExtractedDex> extractedDexes) {
+                                         long crc, List<ExtractedDex> extractedDexes) {
         SharedPreferences prefs = getMultiDexPreferences(context);
         SharedPreferences.Editor edit = prefs.edit();
         edit.putLong(keyPrefix + KEY_TIME_STAMP, timeStamp);
@@ -368,7 +419,7 @@ final class MultiDexExtractor {
     }
 
     private static void extract(ZipFile apk, ZipEntry dexFile, File extractTo,
-            String extractedFilePrefix) throws IOException, FileNotFoundException {
+                                String extractedFilePrefix) throws IOException, FileNotFoundException {
 
         InputStream in = apk.getInputStream(dexFile);
         ZipOutputStream out = null;
