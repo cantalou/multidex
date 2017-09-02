@@ -21,7 +21,7 @@ android {
     buildToolsVersion "25.0.2"
 
     defaultConfig {
-        minSdkVersion 4
+        minSdkVersion 14
         addManifestPlaceholders(["multidex-version": project.rootProject.ext.multidexVersion])
     }
 
@@ -38,5 +38,11 @@ android {
         // TODO: fix errors and reenable.
         abortOnError false
     }
+
+    afterEvaluate {
+        println "11111111111111111111"
+        println tasks.findByName("bundleRelease").getArchiveName()
+    }
 }
+
 

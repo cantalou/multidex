@@ -36,7 +36,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -52,7 +51,7 @@ import java.util.zip.ZipOutputStream;
 final class MultiDexExtractor {
 
     public interface DexAsyncHandler {
-        void handle(File... dexFiles) throws Exception;
+        void handle(File dexFiles) throws Exception;
     }
 
     /**
@@ -90,6 +89,7 @@ final class MultiDexExtractor {
      * Size of reading buffers.
      */
     private static final int BUFFER_SIZE = 0x4000;
+
     /* Keep value away from 0 because it is a too probable time stamp value */
     private static final long NO_VALUE = -1L;
 
@@ -107,8 +107,7 @@ final class MultiDexExtractor {
     static List<? extends File> load(Context context, File sourceApk, File dexDir,
                                      String prefsKeyPrefix,
                                      boolean forceReload, DexAsyncHandler dexAsyncHandler) throws IOException {
-        Log.i(TAG, "MultiDexExtractor.load(" + sourceApk.getPath() + ", " + forceReload + ", " +
-                prefsKeyPrefix + ")");
+        Log.i(TAG, "MultiDexExtractor.load(" + sourceApk.getPath() + ", " + forceReload + ", " + prefsKeyPrefix + ")");
 
         long currentCrc = getZipCrc(sourceApk);
 
@@ -257,47 +256,51 @@ final class MultiDexExtractor {
         try {
 
             int secondaryNumber = 2;
-            ExecutorService executor = Executors.newCachedThreadPool();
-            ArrayList<Future<Void>> taskResult = new ArrayList<>();
-
             ZipEntry dexFile = apk.getEntry(DEX_PREFIX + secondaryNumber + DEX_SUFFIX);
+
+            ExecutorService executor = null;
+            ArrayList<Future<Void>> taskResult = null;
+            if (dexFile != null && dexAsyncHandler != null) {
+                executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+                taskResult = new ArrayList<>();
+            }
             while (dexFile != null) {
                 String fileName = extractedFilePrefix + secondaryNumber + EXTRACTED_SUFFIX;
                 final ExtractedDex extractedFile = new ExtractedDex(dexDir, fileName);
                 files.add(extractedFile);
-                if(dexAsyncHandler != null){
+                if (dexAsyncHandler != null) {
                     final ZipEntry finalDexFile = dexFile;
                     final int finalSecondaryNumber = secondaryNumber;
                     Future<Void> result = executor.submit(new Callable<Void>() {
                         @Override
-                        public Void call() throws Exception{
+                        public Void call() throws Exception {
                             extractEntry(extractedFilePrefix, apk, finalSecondaryNumber, finalDexFile, extractedFile);
                             dexAsyncHandler.handle(extractedFile);
                             return null;
                         }
                     });
                     taskResult.add(result);
-                }else{
+                } else {
                     extractEntry(extractedFilePrefix, apk, secondaryNumber, dexFile, extractedFile);
                 }
                 secondaryNumber++;
                 dexFile = apk.getEntry(DEX_PREFIX + secondaryNumber + DEX_SUFFIX);
             }
-            if(taskResult.size() > 0){
+            if (taskResult != null && taskResult.size() > 0) {
                 executor.shutdown();
                 try {
-                    executor.awaitTermination(Long.MAX_VALUE , TimeUnit.NANOSECONDS);
-                    for(Future<Void> future : taskResult){
+                    executor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+                    for (Future<Void> future : taskResult) {
                         future.get();
                     }
                 } catch (InterruptedException e) {
                     Log.w(TAG, "Failed to wait for all task competed", e);
-                }catch (ExecutionException e){
+                } catch (ExecutionException e) {
                     Log.w(TAG, "Failed to execute task ", e);
                     Throwable cause = e.getCause();
-                    if(cause instanceof IOException){
-                        throw (IOException)cause;
-                    }else{
+                    if (cause instanceof IOException) {
+                        throw (IOException) cause;
+                    } else {
                         throw new IOException(cause.getMessage());
                     }
                 }
