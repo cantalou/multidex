@@ -2,10 +2,9 @@ package com.cantalou.gradle.divider.plugin
 
 import com.android.build.gradle.AppPlugin
 import com.android.build.gradle.api.BaseVariant
-import com.android.build.gradle.internal.transforms.JarMergingTransform
-import com.android.build.gradle.internal.transforms.MultiDexTransform
 import com.cantalou.gradle.divider.configuration.Config
 import com.cantalou.gradle.divider.extension.DividerExtension
+import com.cantalou.gradle.divider.transforms.DividerDexTransform
 import com.cantalou.gradle.divider.transforms.DividerJarMergingTransform
 import com.cantalou.gradle.divider.transforms.DividerProGuardTransform
 import org.gradle.api.Plugin
@@ -47,29 +46,16 @@ public class DividerPlugin implements Plugin<Project> {
             return
         }
 
-        Config config = new Config(project)
+
 
         project.afterEvaluate {
             project.android.applicationVariants.each { BaseVariant variant ->
 
-                // debug combined.jar, JarMergingTransform
-                def variantName = variant.name.capitalize()
-                Task jarMergeTask = appProject.tasks.findByName("transformClassesWithJarMergingFor${variantName}")
-                DividerJarMergingTransform dividerJarMergingTransform = new DividerJarMergingTransform(project, jarMergeTask.transform)
-                set(jarMergeTask, "transform", dividerJarMergingTransform)
-
-                // release combined.jar, mapping.txt, ProGuardTransform
-                Task proguardTask = appProject.tasks.findByName("transformClassesAndResourcesWithProguardFor${variantName}")
-                DividerProGuardTransform dividerProGuardTransform = new DividerProGuardTransform(project, proguardTask.transform)
-                set(jarMergeTask, "transform", dividerProGuardTransform)
-
-                // MultiDexTransform 生成 maindexlist.txt
-                Task transformMultiDexListTask = appProject.tasks.findByName("transformClassesWithMultidexlistFor${variantName}")
-                transformMultiDexListTask.doLast {
-                }
-
                 // DexTransform
+                def variantName = variant.name.capitalize()
                 Task transformDexTask = appProject.tasks.findByName("transformClassesWithDexFor${variantName}")
+                DividerDexTransform dividerDexTransform = new DividerDexTransform(project, transformDexTask.transform)
+                set(transformDexTask, "transform", dividerDexTransform)
             }
         }
     }
