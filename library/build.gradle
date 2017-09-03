@@ -35,14 +35,9 @@ android {
     }
 
     lintOptions {
-        // TODO: fix errors and reenable.
         abortOnError false
     }
 
-    afterEvaluate {
-        println "11111111111111111111"
-        println tasks.findByName("bundleRelease").getArchiveName()
-    }
 }
 
 

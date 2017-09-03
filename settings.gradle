@@ -14,7 +14,8 @@
  * limitations under the License.
  */
 
-include ':support-multidex'
+include ':support-multidex', ':average-dex-plugin',':buildSrc'
+project(':average-dex-plugin').projectDir = new File(rootDir, 'average-dex-plugin')
 project(':support-multidex').projectDir = new File(rootDir, 'library')
 
 include ':support-multidex-instrumentation'
