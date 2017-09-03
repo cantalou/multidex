@@ -46,11 +46,8 @@ public class DividerPlugin implements Plugin<Project> {
             return
         }
 
-
-
         project.afterEvaluate {
             project.android.applicationVariants.each { BaseVariant variant ->
-
                 // DexTransform
                 def variantName = variant.name.capitalize()
                 Task transformDexTask = appProject.tasks.findByName("transformClassesWithDexFor${variantName}")
