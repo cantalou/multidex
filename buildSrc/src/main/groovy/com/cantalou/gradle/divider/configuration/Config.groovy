@@ -1,4 +1,4 @@
-package com.m4399.gradle.divider.configuration
+package com.cantalou.gradle.divider.configuration
 
 import com.m4399.gradle.divider.extension.DividerConfigExtension
 import org.gradle.api.Project

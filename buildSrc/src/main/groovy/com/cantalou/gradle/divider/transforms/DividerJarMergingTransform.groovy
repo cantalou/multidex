@@ -1,4 +1,4 @@
-package com.m4399.gradle.divider.transforms
+package com.cantalou.gradle.divider.transforms
 
 import com.android.build.api.transform.TransformException;
 import com.android.build.api.transform.TransformInvocation;

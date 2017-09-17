@@ -12,11 +12,12 @@
  * limitations under the License.
  */
 
-package com.m4399.gradle.divider.dexcount.dex;
+package com.cantalou.gradle.divider.dexcount.dex;
 
 
-import com.m4399.gradle.divider.dexcount.dexdeps.DexData;
-import com.m4399.gradle.divider.dexcount.dexdeps.DexDataException;
+
+import com.cantalou.gradle.divider.dexcount.dexdeps.DexData;
+import com.cantalou.gradle.divider.dexcount.dexdeps.DexDataException;
 
 import java.io.File;
 import java.io.FileNotFoundException;

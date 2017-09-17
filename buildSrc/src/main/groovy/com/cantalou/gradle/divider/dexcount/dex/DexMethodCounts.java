@@ -12,13 +12,14 @@
  * limitations under the License.
  */
 
-package com.m4399.gradle.divider.dexcount.dex;
+package com.cantalou.gradle.divider.dexcount.dex;
 
 
-import com.m4399.gradle.divider.dexcount.dexdeps.ClassRef;
-import com.m4399.gradle.divider.dexcount.dexdeps.DexData;
-import com.m4399.gradle.divider.dexcount.dexdeps.MethodRef;
-import com.m4399.gradle.divider.dexcount.dexdeps.Output;
+
+import com.cantalou.gradle.divider.dexcount.dexdeps.ClassRef;
+import com.cantalou.gradle.divider.dexcount.dexdeps.DexData;
+import com.cantalou.gradle.divider.dexcount.dexdeps.MethodRef;
+import com.cantalou.gradle.divider.dexcount.dexdeps.Output;
 
 import java.io.PrintStream;
 import java.util.ArrayList;

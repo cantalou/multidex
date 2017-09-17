@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.m4399.gradle.divider.dexcount.dexdeps;
+package com.cantalou.gradle.divider.dexcount.dexdeps;
 
 public class FieldRef {
     private String mDeclClass, mFieldType, mFieldName;

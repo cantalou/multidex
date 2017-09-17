@@ -1,4 +1,4 @@
-package com.m4399.gradle.divider.transforms
+package com.cantalou.gradle.divider.transforms
 
 import com.android.SdkConstants
 import com.android.build.api.transform.*
@@ -13,6 +13,7 @@ import com.android.ide.common.blame.ParsingProcessOutputHandler
 import com.android.ide.common.blame.parser.DexParser
 import com.android.ide.common.blame.parser.ToolOutputParser
 import com.android.ide.common.process.ProcessOutputHandler
+import com.cantalou.gradle.divider.configuration.Config
 import com.m4399.gradle.divider.configuration.Config
 import org.gradle.api.Project
 
@@ -195,6 +196,4 @@ public class DividerDexTransform extends DexTransform {
             jarMerger.close();
         }
     }
-
-
 }

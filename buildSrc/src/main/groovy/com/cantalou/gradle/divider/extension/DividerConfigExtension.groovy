@@ -1,4 +1,4 @@
-package com.m4399.gradle.divider.extension
+package com.cantalou.gradle.divider.extension
 
 /**
  * Config info for Divider plugin
