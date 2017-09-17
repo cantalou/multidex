@@ -1,6 +1,6 @@
 package com.cantalou.gradle.divider.configuration
 
-import com.m4399.gradle.divider.extension.DividerConfigExtension
+import com.cantalou.gradle.divider.extension.DividerConfigExtension
 import org.gradle.api.Project
 
 public class Config {

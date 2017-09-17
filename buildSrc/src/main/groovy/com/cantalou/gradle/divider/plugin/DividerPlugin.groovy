@@ -2,6 +2,7 @@ package com.cantalou.gradle.divider.plugin
 
 import com.android.build.gradle.AppPlugin
 import com.android.build.gradle.api.BaseVariant
+import com.cantalou.gradle.divider.transforms.DividerDexTransform
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.Task

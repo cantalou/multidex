@@ -14,7 +14,6 @@ import com.android.ide.common.blame.parser.DexParser
 import com.android.ide.common.blame.parser.ToolOutputParser
 import com.android.ide.common.process.ProcessOutputHandler
 import com.cantalou.gradle.divider.configuration.Config
-import com.m4399.gradle.divider.configuration.Config
 import org.gradle.api.Project
 
 import java.util.concurrent.ExecutorService

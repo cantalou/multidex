@@ -1,12 +1,12 @@
-package com.m4399.gradle.divider
+package com.cantalou.gradle.divider
 
 import com.android.build.gradle.AppPlugin
 import com.android.build.gradle.api.BaseVariant
 import com.android.build.gradle.internal.pipeline.TransformTask
-import com.m4399.gradle.divider.configuration.Config
-import com.m4399.gradle.divider.dexcount.dexdeps.DexData
-import com.m4399.gradle.divider.extension.DividerConfigExtension
-import com.m4399.gradle.divider.transforms.DividerDexTransform
+import com.cantalou.gradle.divider.configuration.Config
+import com.cantalou.gradle.divider.dexcount.dexdeps.DexData
+import com.cantalou.gradle.divider.extension.DividerConfigExtension
+import com.cantalou.gradle.divider.transforms.DividerDexTransform
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.Task
