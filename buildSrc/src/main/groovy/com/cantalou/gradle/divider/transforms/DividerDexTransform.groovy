@@ -1,116 +1,173 @@
-package com.cantalou.gradle.divider.transforms
+package com.m4399.gradle.divider.transforms
 
 import com.android.SdkConstants
-import com.android.build.api.transform.DirectoryInput
-import com.android.build.api.transform.Format
-import com.android.build.api.transform.JarInput;
-import com.android.build.api.transform.TransformException;
-import com.android.build.api.transform.TransformInput;
-import com.android.build.api.transform.TransformInvocation;
-import com.android.build.gradle.internal.incremental.InstantRunBuildContext;
+import com.android.build.api.transform.*
 import com.android.build.gradle.internal.transforms.DexTransform
-import com.android.build.gradle.internal.transforms.JarMerger;
-import com.android.builder.core.AndroidBuilder;
-import com.android.builder.core.DexOptions;
-import com.android.builder.internal.utils.FileCache
+import com.android.build.gradle.internal.transforms.JarMerger
+import com.android.builder.core.DefaultDexOptions
+import com.android.builder.core.DexByteCodeConverter
+import com.android.builder.core.DexOptions
 import com.android.builder.packaging.ZipEntryFilter
-import com.android.utils.FileUtils
-import com.cantalou.gradle.divider.configuration.Config
-import org.gradle.api.Project;
-import org.gradle.api.logging.Logger;
+import com.android.ide.common.blame.Message
+import com.android.ide.common.blame.ParsingProcessOutputHandler
+import com.android.ide.common.blame.parser.DexParser
+import com.android.ide.common.blame.parser.ToolOutputParser
+import com.android.ide.common.process.ProcessOutputHandler
+import com.m4399.gradle.divider.configuration.Config
+import org.gradle.api.Project
 
-import java.io.File;
-import java.io.IOException;
-import java.util.Collection
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
-import java.util.stream.Collectors
-import java.util.stream.Stream
 
-import static com.android.utils.FileUtils.deleteIfExists;
-
-/*
- * Licensed under the Apache License, Version 2.0 (the "License"); you may not
- * use this file except in compliance with the License. You may obtain a copy of
- * the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed To in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
- * License for the specific language governing permissions and limitations under
- * the License.
- *
- * @author cantalou
- * @date 2017-09-02 22:30
- */
+import static com.android.utils.FileUtils.deleteIfExists
 
 public class DividerDexTransform extends DexTransform {
 
-    private Project project
+    Project project
+
+    DexTransform dexTransform
+
+    File dividerBuildDir;
 
     public DividerDexTransform(Project project, DexTransform dexTransform) {
         super(dexTransform.dexOptions, dexTransform.debugMode, dexTransform.multiDex, dexTransform.mainDexListFile, dexTransform.intermediateFolder,
-                dexTransform.androidBuilder, dexTransform.logger, dexTransform.instantRunBuildContext, dexTransform.buildCache);
+                dexTransform.androidBuilder, dexTransform.logger.logger, dexTransform.instantRunBuildContext, dexTransform.buildCache);
         this.project = project
+        this.dexTransform = dexTransform
+
+        dividerBuildDir = new File("${project.buildDir}/intermediates/divider")
+        dividerBuildDir.mkdirs()
     }
 
     @Override
-    public void transform(TransformInvocation transformInvocation) throws TransformException, IOException, InterruptedException {
+    public void transform(final TransformInvocation invocation) throws TransformException, IOException, InterruptedException {
 
         def mainDexClass = new HashSet()
-        mainDexListFile.getText("UTF-8").eachLine {
+        println dexTransform.mainDexListFile
+        dexTransform.mainDexListFile.getText("UTF-8").eachLine {
             mainDexClass << it
         }
 
-        //now only one jar combined.jar
+        //now only one file combined.jar
         File combinedJar
         for (TransformInput input : invocation.getInputs()) {
             for (JarInput jarInput : input.getJarInputs()) {
                 combinedJar = jarInput.getFile()
             }
         }
-        //rename combined.jar to combined-bak.jar
-        File combinedBakJar = combinedJar.renameTo(new File(combinedJar.absolutePath.replace(combinedJar.name, "bak-" + combinedJar.name)))
 
-        ExecutorService service = Executors.newFixedThreadPool(2)
+        //secondary jar dir
+        File secondaryJarDir = new File("${dividerBuildDir}/jar")
+        secondaryJarDir.mkdirs()
+        secondaryJarDir.eachFile { it.delete() }
+        project.copy {
+            from combinedJar
+            into secondaryJarDir
+        }
+
+        ExecutorService service = Executors.newCachedThreadPool()
+        //main dex
         service.submit(new Runnable() {
             @Override
             void run() {
-                createMainDexCombineJar(combinedBakJar, mainDexClass)
+                createMainDexCombineJar(combinedJar, mainDexClass)
+                if (!dexTransform.dexOptions.additionalParameters.contains("--minimal-main-dex")) {
+                    dexTransform.dexOptions.additionalParameters.add("--minimal-main-dex")
+                }
+                dexTransform.transform(invocation);
             }
         })
+
+        //secondary dex
         service.submit(new Runnable() {
             @Override
             void run() {
-                createSecondDexCombineJar(combinedBakJar, mainDexClass)
+                try {
+                    File secondaryCombinedJar = new File(secondaryJarDir, combinedJar.name)
+                    createSecondDexCombineJar(secondaryCombinedJar, mainDexClass)
+                    transformSecondary(invocation, secondaryCombinedJar)
+                } catch (Exception e) {
+                    println e.printStackTrace()
+                }
             }
         })
         service.shutdown()
         service.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS)
 
-        super.transform(transformInvocation);
 
-        Config config = new Config(project)
     }
 
-    private void createMainDexCombineJar(File combinedBakJar, HashSet<String> mainDexClass) {
-        File combinedJar = new File(combinedBakJar.getParentFile(), "combined.jar")
-        deleteIfExists(combinedJar);
+    public void transformSecondary(TransformInvocation transformInvocation, File secondaryJar) throws TransformException, IOException, InterruptedException {
+
+        TransformOutputProvider outputProvider = transformInvocation.getOutputProvider();
+
+        ProcessOutputHandler outputHandler = new ParsingProcessOutputHandler(
+                new ToolOutputParser(new DexParser(), Message.Kind.ERROR, dexTransform.logger),
+                new ToolOutputParser(new DexParser(), dexTransform.logger),
+                dexTransform.androidBuilder.getErrorReporter());
+
+        try {
+            def secondaryOutputDir =  new File("${dividerBuildDir}/dex");
+            secondaryOutputDir.mkdirs()
+            secondaryOutputDir.eachFile { it.delete() }
+
+            DexOptions tempDexOptions = DefaultDexOptions.copyOf(dexTransform.dexOptions)
+            def additionalParameters = new ArrayList<>(tempDexOptions.additionalParameters)
+            additionalParameters.remove("--minimal-main-dex")
+            Config config = new Config(project)
+            config.parse()
+            if (config.dexMethodCount > 0) {
+                additionalParameters.removeAll {it.contains("set-max-idx-number")}
+                additionalParameters.collect {}
+                additionalParameters.add("--set-max-idx-number=" + config.dexMethodCount)
+                println "Add DexOptions set-max-idx-number value ${config.dexMethodCount}"
+            }
+            tempDexOptions.additionalParameters = additionalParameters
+
+
+            def dexByteCodeConverter = new DexByteCodeConverter(dexTransform.androidBuilder.getLogger(), dexTransform.androidBuilder.mTargetInfo,
+                    dexTransform.androidBuilder.mJavaProcessExecutor, dexTransform.androidBuilder.mVerboseExec);
+            dexByteCodeConverter.convertByteCode([secondaryJar], secondaryOutputDir, dexTransform.multiDex, null, tempDexOptions, dexTransform.getOptimize(), outputHandler);
+
+
+            int classesIndex = secondaryOutputDir.listFiles().length + 1
+            new File(secondaryOutputDir, "classes.dex").renameTo(new File(secondaryOutputDir, "classes" + classesIndex + ".dex"))
+
+            def mainOutputDir = outputProvider.getContentLocation("main", dexTransform.getOutputTypes(), dexTransform.getScopes(), Format.DIRECTORY);
+            secondaryOutputDir.eachFile { def secondaryDex ->
+                project.copy {
+                    from secondaryDex
+                    into mainOutputDir
+                }
+            }
+
+        } catch (Exception e) {
+            project.println e
+            throw new TransformException(e);
+        }
+
+
+    }
+
+    private void createMainDexCombineJar(File combinedJar, HashSet<String> mainDexClass) {
+        File combinedTmpJar = new File(combinedJar.getParentFile(), "combined-tmp.jar")
+        deleteIfExists(combinedTmpJar);
         ZipEntryFilter filter = new ZipEntryFilter() {
             @Override
             public boolean checkEntry(String archivePath) {
                 return archivePath.endsWith(SdkConstants.DOT_CLASS) && mainDexClass.contains(archivePath)
             }
         }
-        merge(combinedBakJar, combinedJar, filter)
+        merge(combinedJar, combinedTmpJar, filter)
+        combinedJar.delete()
+        combinedTmpJar.renameTo(combinedJar)
+        println "CreateMainDexCombineJar success ${combinedTmpJar}"
     }
 
-    private void createSecondDexCombineJar(File combinedBakJar, HashSet<String> mainDexClass) {
+    private File createSecondDexCombineJar(File combinedJar, HashSet<String> mainDexClass) {
 
-        File secondaryJar = new File(combinedBakJar.getParentFile(), "secondary.jar")
+        File secondaryJar = new File(combinedJar.getParentFile(), "combined-tmp.jar")
         deleteIfExists(secondaryJar);
 
         ZipEntryFilter filter = new ZipEntryFilter() {
@@ -120,7 +177,9 @@ public class DividerDexTransform extends DexTransform {
             }
         }
         merge(combinedJar, secondaryJar, filter)
-
+        combinedJar.delete()
+        secondaryJar.renameTo(combinedJar)
+        println "CreateSecondDexCombineJar success ${secondaryJar}"
     }
 
     private void merge(File inputJar, File outputJar, ZipEntryFilter filter) {
@@ -136,4 +195,6 @@ public class DividerDexTransform extends DexTransform {
             jarMerger.close();
         }
     }
+
+
 }

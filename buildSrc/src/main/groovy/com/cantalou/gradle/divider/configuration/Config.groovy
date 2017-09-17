@@ -1,25 +1,7 @@
-package com.cantalou.gradle.divider.configuration
+package com.m4399.gradle.divider.configuration
 
-import com.cantalou.gradle.divider.extension.DividerExtension
+import com.m4399.gradle.divider.extension.DividerConfigExtension
 import org.gradle.api.Project
-import org.gradle.api.internal.tasks.PublicTaskSpecification
-
-/*
- * Licensed under the Apache License, Version 2.0 (the "License"); you may not
- * use this file except in compliance with the License. You may obtain a copy of
- * the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed To in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
- * License for the specific language governing permissions and limitations under
- * the License.
- *
- * @author cantalou
- * @date 2017-09-02 18:43
- */
 
 public class Config {
 
@@ -28,34 +10,41 @@ public class Config {
      */
     private static final String DEFAULT_CONFIG_FILE = "divider-plugin.properties";
 
-    public int totalMethodCount;
+    int totalMethodCount = 0;
 
-    public int dexMethodCount;
+    int dexMethodCount = 0;
 
-    public int dexCount;
+    int dexCount = 0;
 
-    private Project project;
+    Project project;
 
-    private Properties prop;
+    Properties prop;
+
+    File configFile
 
     public Config(Project project) {
         this.project = project
-        parse()
-    }
-
-    public void parse() {
-
+        prop = new Properties()
         def configFileName
-        DividerExtension ext = project.extensions.dividerConfig
+        DividerConfigExtension ext = project.extensions.dividerConfig
         if (ext == null) {
             configFileName = Config.DEFAULT_CONFIG_FILE
         } else {
             configFileName = ext.configFile
         }
+        configFile = new File(project.getRootDir(), configFileName)
 
-        prop = new Properties();
-        def configFile = new File(project.getRootDir(), configFileName)
-        configFile.withInputStream("UTF-8") {
+        parse()
+    }
+
+    public void parse() {
+
+        if(!configFile.exists()){
+            project.println "File ${configFile} not found"
+            return
+        }
+
+        configFile.withReader("UTF-8"){
             prop.load(it)
         }
 
@@ -65,10 +54,10 @@ public class Config {
     }
 
     public void save() {
-        prop.setProperty("totalMethodCount", totalMethodCount)
-        prop.setProperty("dexMethodCount", dexMethodCount)
-        prop.setProperty("dexCount", dexCount)
-        new File(project.getRootDir(), configFileName).withOutputStream {
+        prop.setProperty("totalMethodCount", Integer.toString(totalMethodCount))
+        prop.setProperty("dexMethodCount", Integer.toString(dexMethodCount))
+        prop.setProperty("dexCount", Integer.toString(dexCount))
+        configFile.withWriter("UTF-8") {
             prop.store(it, "UTF-8")
         }
     }

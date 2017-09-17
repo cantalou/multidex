@@ -343,10 +343,14 @@ public final class MultiDex {
                     @Override
                     public void handle(File dexFile) throws Exception {
                         if ((finalMode & MODE_DEX_OPT_PARALLEL) == MODE_DEX_OPT_PARALLEL) {
+                            long start = System.currentTimeMillis();
                             new DexClassLoader(dexFile.getAbsolutePath(), dexDir.getAbsolutePath(), "", loader);
+                            Log.i(TAG, "Dex opt success " + (System.currentTimeMillis() - start) + "ms " + dexFile);
                         } else {
                             synchronized (MultiDex.class) {
+                                long start = System.currentTimeMillis();
                                 new DexClassLoader(dexFile.getAbsolutePath(), dexDir.getAbsolutePath(), "", loader);
+                                Log.i(TAG, "Dex opt success " + (System.currentTimeMillis() - start) + "ms " + dexFile);
                             }
                         }
                     }
