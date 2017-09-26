@@ -9,7 +9,7 @@ import org.gradle.api.Project
 import org.gradle.api.Task
 
 /**
- * 根据上次构建的结果, 平均分配除mainDex以外每个dex文件里面的方法数
+ * Plugin used to hack "transformClassesWithDexFor" task and add a task to collect method info
  */
 public class DividerPlugin implements Plugin<Project> {
 
@@ -63,7 +63,6 @@ public class DividerPlugin implements Plugin<Project> {
                 countMethodTask.dependsOn transformDexTask.getPath()
 
                 project.tasks.findByName("assemble${variantName}").dependsOn countMethodTask.getPath()
-
             }
         }
     }

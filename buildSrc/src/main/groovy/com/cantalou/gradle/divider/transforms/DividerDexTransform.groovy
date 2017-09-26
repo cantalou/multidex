@@ -22,6 +22,9 @@ import java.util.concurrent.TimeUnit
 
 import static com.android.utils.FileUtils.deleteIfExists
 
+/**
+ *
+ */
 public class DividerDexTransform extends DexTransform {
 
     Project project
@@ -44,8 +47,6 @@ public class DividerDexTransform extends DexTransform {
 
     @Override
     public void transform(final TransformInvocation invocation) throws TransformException, IOException, InterruptedException {
-
-
 
         def mainDexClass = new HashSet()
         println dexTransform.mainDexListFile
@@ -76,8 +77,9 @@ public class DividerDexTransform extends DexTransform {
             @Override
             void run() {
                 createMainDexCombineJar(combinedJar, mainDexClass)
-                if (!dexTransform.dexOptions.additionalParameters.contains("--minimal-main-dex")) {
-                    dexTransform.dexOptions.additionalParameters.add("--minimal-main-dex")
+                def additionalParameters = dexTransform.dexOptions.additionalParameters
+                if (!additionalParameters.contains("--minimal-main-dex")) {
+                    additionalParameters.add("--minimal-main-dex")
                 }
                 dexTransform.transform(invocation);
             }
@@ -127,10 +129,8 @@ public class DividerDexTransform extends DexTransform {
             }
             tempDexOptions.additionalParameters = additionalParameters
 
-
             def dexByteCodeConverter = new DexByteCodeConverter(androidBuilder.getLogger(), androidBuilder.mTargetInfo, androidBuilder.mJavaProcessExecutor, androidBuilder.mVerboseExec);
             dexByteCodeConverter.convertByteCode([secondaryJar], secondaryOutputDir, dexTransform.multiDex, null, tempDexOptions, dexTransform.getOptimize(), outputHandler);
-
 
             int classesIndex = secondaryOutputDir.listFiles().length + 1
             new File(secondaryOutputDir, "classes.dex").renameTo(new File(secondaryOutputDir, "classes" + classesIndex + ".dex"))
@@ -161,10 +161,16 @@ public class DividerDexTransform extends DexTransform {
         merge(combinedJar, combinedTmpJar, filter)
         combinedJar.delete()
         combinedTmpJar.renameTo(combinedJar)
-        println "CreateMainDexCombineJar success ${combinedTmpJar}"
+        println "CreateMainDexCombineJar success ${combinedJar}"
     }
 
-    private File createSecondDexCombineJar(File combinedJar, HashSet<String> mainDexClass) {
+    /**
+     * Create second combined.jar file by removing class in mainDexListFile
+     *
+     * @param combinedJar
+     * @param mainDexClass line class info in mainDexListFile
+     */
+    private void createSecondDexCombineJar(File combinedJar, HashSet<String> mainDexClass) {
 
         File secondaryJar = new File(combinedJar.getParentFile(), "combined-tmp.jar")
         deleteIfExists(secondaryJar);
@@ -178,7 +184,7 @@ public class DividerDexTransform extends DexTransform {
         merge(combinedJar, secondaryJar, filter)
         combinedJar.delete()
         secondaryJar.renameTo(combinedJar)
-        println "CreateSecondDexCombineJar success ${secondaryJar}"
+        println "CreateSecondDexCombineJar success ${combinedJar}"
     }
 
     private void merge(File inputJar, File outputJar, ZipEntryFilter filter) {
