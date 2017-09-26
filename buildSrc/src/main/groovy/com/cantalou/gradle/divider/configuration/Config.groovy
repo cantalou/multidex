@@ -8,21 +8,39 @@ public class Config {
     /**
      * divider-plugin.properties
      */
-    private static final String DEFAULT_CONFIG_FILE = "divider-plugin.properties";
+    private static final String DEFAULT_CONFIG_FILE = "divider-plugin.properties"
 
-    int totalMethodCount = 0;
+    int totalMethodCount = 0
 
-    int dexMethodCount = 0;
+    int dexMethodCount = 0
 
-    int dexCount = 0;
+    int dexCount = 0
 
-    Project project;
+    Project project
 
-    Properties prop;
+    Properties prop
 
     File configFile
 
-    public Config(Project project) {
+    boolean inited
+
+    static Config instance
+
+    public static Config getInstance(Project project) {
+
+        if (instance == null) {
+            instance = new Config(project)
+        }
+
+        if (!instance.inited) {
+            instance.parse()
+        }
+
+        instance
+    }
+
+    Config(Project project) {
+
         this.project = project
         prop = new Properties()
         def configFileName
@@ -33,24 +51,24 @@ public class Config {
             configFileName = ext.configFile
         }
         configFile = new File(project.getRootDir(), configFileName)
-
-        parse()
     }
 
     public void parse() {
 
-        if(!configFile.exists()){
+        if (!configFile.exists()) {
             project.println "File ${configFile} not found"
             return
         }
 
-        configFile.withReader("UTF-8"){
+        configFile.withReader("UTF-8") {
             prop.load(it)
         }
 
         totalMethodCount = prop.getProperty("totalMethodCount") as int
         dexMethodCount = prop.getProperty("dexMethodCount") as int
         dexCount = prop.getProperty("dexCount") as int
+
+        inited = true
     }
 
     public void save() {

@@ -31,7 +31,7 @@ public class DividerConfigExtension {
     /**
      * To avoid generating small dex file
      */
-    int dexMethodCountPadding = 1000
+    int dexMethodCountPadding = 2000
 
     /**
      * ICS compatible

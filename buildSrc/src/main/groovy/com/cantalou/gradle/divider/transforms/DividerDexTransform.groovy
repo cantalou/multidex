@@ -28,7 +28,9 @@ public class DividerDexTransform extends DexTransform {
 
     DexTransform dexTransform
 
-    File dividerBuildDir;
+    File dividerBuildDir
+
+    Config config
 
     public DividerDexTransform(Project project, DexTransform dexTransform) {
         super(dexTransform.dexOptions, dexTransform.debugMode, dexTransform.multiDex, dexTransform.mainDexListFile, dexTransform.intermediateFolder,
@@ -42,6 +44,8 @@ public class DividerDexTransform extends DexTransform {
 
     @Override
     public void transform(final TransformInvocation invocation) throws TransformException, IOException, InterruptedException {
+
+
 
         def mainDexClass = new HashSet()
         println dexTransform.mainDexListFile
@@ -94,40 +98,37 @@ public class DividerDexTransform extends DexTransform {
         })
         service.shutdown()
         service.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS)
-
-
     }
 
     public void transformSecondary(TransformInvocation transformInvocation, File secondaryJar) throws TransformException, IOException, InterruptedException {
 
         TransformOutputProvider outputProvider = transformInvocation.getOutputProvider();
 
+        def androidBuilder = dexTransform.androidBuilder
         ProcessOutputHandler outputHandler = new ParsingProcessOutputHandler(
                 new ToolOutputParser(new DexParser(), Message.Kind.ERROR, dexTransform.logger),
                 new ToolOutputParser(new DexParser(), dexTransform.logger),
-                dexTransform.androidBuilder.getErrorReporter());
+                androidBuilder.getErrorReporter());
 
         try {
-            def secondaryOutputDir =  new File("${dividerBuildDir}/dex");
+            def secondaryOutputDir = new File("${dividerBuildDir}/dex");
             secondaryOutputDir.mkdirs()
             secondaryOutputDir.eachFile { it.delete() }
 
             DexOptions tempDexOptions = DefaultDexOptions.copyOf(dexTransform.dexOptions)
             def additionalParameters = new ArrayList<>(tempDexOptions.additionalParameters)
             additionalParameters.remove("--minimal-main-dex")
-            Config config = new Config(project)
-            config.parse()
+
+            config = Config.getInstance(project)
             if (config.dexMethodCount > 0) {
-                additionalParameters.removeAll {it.contains("set-max-idx-number")}
-                additionalParameters.collect {}
+                additionalParameters.removeAll { it.contains("set-max-idx-number") }
                 additionalParameters.add("--set-max-idx-number=" + config.dexMethodCount)
                 println "Add DexOptions set-max-idx-number value ${config.dexMethodCount}"
             }
             tempDexOptions.additionalParameters = additionalParameters
 
 
-            def dexByteCodeConverter = new DexByteCodeConverter(dexTransform.androidBuilder.getLogger(), dexTransform.androidBuilder.mTargetInfo,
-                    dexTransform.androidBuilder.mJavaProcessExecutor, dexTransform.androidBuilder.mVerboseExec);
+            def dexByteCodeConverter = new DexByteCodeConverter(androidBuilder.getLogger(), androidBuilder.mTargetInfo, androidBuilder.mJavaProcessExecutor, androidBuilder.mVerboseExec);
             dexByteCodeConverter.convertByteCode([secondaryJar], secondaryOutputDir, dexTransform.multiDex, null, tempDexOptions, dexTransform.getOptimize(), outputHandler);
 
 
@@ -146,8 +147,6 @@ public class DividerDexTransform extends DexTransform {
             project.println e
             throw new TransformException(e);
         }
-
-
     }
 
     private void createMainDexCombineJar(File combinedJar, HashSet<String> mainDexClass) {
