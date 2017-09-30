@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 The Android Open Source Project
+ * Copyright (C) 2009 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
-include ':support-multidex', ':app', ':dexdividerplugin'
-project(':support-multidex').projectDir = new File(rootDir, 'library')
+package com.cantalou.gradle.divider.dexcount.dexdeps;
 
+/**
+ * Bad data found inside a DEX file.
+ */
+public class DexDataException extends RuntimeException {
+}
