@@ -174,84 +174,6 @@ public final class MultiDex {
     }
 
     /**
-     * Patches the instrumentation context class loader by appending extra dex files
-     * loaded from the instrumentation apk and the application apk. This method should be called in
-     * the onCreate of your {@link Instrumentation}, see
-     * {@link com.android.test.runner.MultiDexTestRunner} for an example.
-     *
-     * @param instrumentationContext instrumentation context.
-     * @param targetContext          target application context.
-     * @throws RuntimeException if an error occurred preventing the classloader
-     *                          extension.
-     */
-    public static void installInstrumentation(Context instrumentationContext,
-                                              Context targetContext) {
-        Log.i(TAG, "Installing instrumentation");
-
-        if (IS_VM_MULTIDEX_CAPABLE) {
-            Log.i(TAG, "VM has multidex support, MultiDex support library is disabled.");
-            return;
-        }
-
-        if (Build.VERSION.SDK_INT < MIN_SDK_VERSION) {
-            throw new RuntimeException("MultiDex installation failed. SDK " + Build.VERSION.SDK_INT
-                    + " is unsupported. Min SDK version is " + MIN_SDK_VERSION + ".");
-        }
-        try {
-
-            ApplicationInfo instrumentationInfo = getApplicationInfo(instrumentationContext);
-            if (instrumentationInfo == null) {
-                Log.i(TAG, "No ApplicationInfo available for instrumentation, i.e. running on a"
-                        + " test Context: MultiDex support library is disabled.");
-                return;
-            }
-
-            ApplicationInfo applicationInfo = getApplicationInfo(targetContext);
-            if (applicationInfo == null) {
-                Log.i(TAG, "No ApplicationInfo available, i.e. running on a test Context:"
-                        + " MultiDex support library is disabled.");
-                return;
-            }
-
-            String instrumentationPrefix = instrumentationContext.getPackageName() + ".";
-
-            File dataDir = new File(applicationInfo.dataDir);
-
-            doInstallation(targetContext,
-                    new File(instrumentationInfo.sourceDir),
-                    dataDir,
-                    instrumentationPrefix + CODE_CACHE_SECONDARY_FOLDER_NAME,
-                    instrumentationPrefix);
-
-            doInstallation(targetContext,
-                    new File(applicationInfo.sourceDir),
-                    dataDir,
-                    CODE_CACHE_SECONDARY_FOLDER_NAME,
-                    NO_KEY_PREFIX);
-        } catch (Exception e) {
-            Log.e(TAG, "MultiDex installation failure", e);
-            throw new RuntimeException("MultiDex installation failed (" + e.getMessage() + ").");
-        }
-        Log.i(TAG, "Installation done");
-    }
-
-    /**
-     * @param mainContext         context used to get filesDir, to save preference and to get the
-     *                            classloader to patch.
-     * @param sourceApk           Apk file.
-     * @param dataDir             data directory to use for code cache simulation.
-     * @param secondaryFolderName name of the folder for storing extractions.
-     * @param prefsKeyPrefix      prefix of all stored preference keys.
-     * @param mode
-     */
-    private static void doInstallation(Context mainContext, File sourceApk, File dataDir,
-                                       String secondaryFolderName, String prefsKeyPrefix) throws IOException,
-            IllegalArgumentException, IllegalAccessException, NoSuchFieldException,
-            InvocationTargetException, NoSuchMethodException {
-        doInstallation(mainContext, sourceApk, dataDir, secondaryFolderName, prefsKeyPrefix, MODE_AUTO);
-    }
-
-    /**
      * @param mainContext         context used to get filesDir, to save preference and to get the
      *                            classloader to patch.
      * @param sourceApk           Apk file.
@@ -430,16 +352,16 @@ public final class MultiDex {
         }
         String nativeLibraryPath = "";
         try {
-//            nativeLibraryPath = (String) loader.getClass()
-//                    .getMethod("getLdLibraryPath", new Class[0])
-//                    .invoke(loader, new Object[0]);
+            nativeLibraryPath = (String) loader.getClass()
+                    .getMethod("getLdLibraryPath", new Class[0])
+                    .invoke(loader, new Object[0]);
         } catch (Exception e) {
             Log.e(TAG, "Failed to determine native library path " + e.getMessage());
         }
         IncrementalClassLoader.inject(loader, nativeLibraryPath, dexDir.getAbsolutePath(), filePaths);
     }
 
-    private static void installSecondaryDexes(ClassLoader loader, File dexDir,
+    public static void installSecondaryDexes(ClassLoader loader, File dexDir,
                                               List<? extends File> files)
             throws IllegalArgumentException, IllegalAccessException, NoSuchFieldException,
             InvocationTargetException, NoSuchMethodException, IOException {

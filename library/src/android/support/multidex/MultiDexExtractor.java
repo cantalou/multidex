@@ -48,7 +48,7 @@ import java.util.zip.ZipOutputStream;
  * Exposes application secondary dex files as files in the application data
  * directory.
  */
-final class MultiDexExtractor {
+public final class MultiDexExtractor {
 
     public interface DexAsyncHandler {
         void handle(File dexFiles) throws Exception;
@@ -104,7 +104,7 @@ final class MultiDexExtractor {
      * @throws IOException if encounters a problem while reading or writing
      *                     secondary dex files
      */
-    static List<? extends File> load(Context context, File sourceApk, File dexDir,
+    public static List<? extends File> load(Context context, File sourceApk, File dexDir,
                                      String prefsKeyPrefix,
                                      boolean forceReload, DexAsyncHandler dexAsyncHandler) throws IOException {
         Log.i(TAG, "MultiDexExtractor.load(" + sourceApk.getPath() + ", " + forceReload + ", " + prefsKeyPrefix + ")");
