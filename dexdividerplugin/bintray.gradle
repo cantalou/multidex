@@ -34,26 +34,38 @@ afterEvaluate {
 }
 
 task sourcesJar(type: Jar) {
-    from android.sourceSets.main.java.srcDirs
+    def srcDirs = []
+    if (project.hasProperty("android")) {
+        srcDirs << android.sourceSets.main.java.srcDirs
+    } else {
+        sourceSets.main.each {
+            srcDirs << it.getAllJava().srcDirs
+        }
+    }
+    from srcDirs
     classifier = 'sources'
 }
 
-task javadoc(type: Javadoc) {
-    if(project.hasProperty("android")){
+task javadocTask(type: Javadoc) {
+    if (project.hasProperty("android")) {
         source android.sourceSets.main.java.srcDirs
-    }else{
-        sourceSets.main.each{
-            source it.srcDirs
+    } else {
+        sourceSets.main.each {
+            source it.getAllJava().srcDirs
         }
     }
 
     classpath += configurations.compile
-    classpath += project.files(android.getBootClasspath().join(File.pathSeparator))
-    android.libraryVariants.all { variant ->
-        variant.javaCompile.classpath.files.each {
-            classpath += project.files(it)
+
+    if (project.hasProperty("android")) {
+        classpath += project.files(android.getBootClasspath().join(File.pathSeparator))
+        android.libraryVariants.all { variant ->
+            variant.javaCompile.classpath.files.each {
+                classpath += project.files(it)
+            }
         }
     }
+
     failOnError false
 }
 
@@ -89,75 +101,110 @@ def pomConfig = {
     }
 }
 
+install {
+    repositories {
+        mavenInstaller {
+            pom.project {
+                // Description
+                name PROJ_NAME
+                description ""
+                url ""
+
+                // Archive
+                groupId PROJ_GROUP
+                artifactId PROJ_ARTIFACTID
+                version PROJ_VERSION
+
+                // License
+                inceptionYear ""
+            }
+        }
+    }
+}
+
 publishing {
     publications {
-        aarPublication(MavenPublication) {
 
-            groupId PROJ_GROUP
-            artifactId PROJ_ARTIFACTID
-            version PROJ_VERSION
+        def publicType = "all"
 
-            artifact sourcesJar
-            artifact javadocJar
-            artifact "${project.buildDir}/outputs/aar/${project.name}-release.aar"
+        if (project.hasProperty("publicType")) {
+            publicType = project.getProperty("publicType")
+        }
 
-            pom.withXml {
-                def root = asNode()
-                def dependenciesNode = root.appendNode('dependencies')
-                configurations.each { configuration ->
-                    configuration.allDependencies.findAll { it.name != 'unspecified' && it.name != null }.each {
-                        def dependencyNode = dependenciesNode.appendNode('dependency')
-                        dependencyNode.appendNode('groupId', it.group)
-                        dependencyNode.appendNode('artifactId', it.name)
-                        dependencyNode.appendNode('version', it.version)
+        if (publicType == "aar" || publicType == "all") {
+            aarPublication(MavenPublication) {
 
-                        if (it.excludeRules.size() > 0) {
-                            def exclusionsNode = dependencyNode.appendNode('exclusions')
-                            it.excludeRules.each { rule ->
-                                def exclusionNode = exclusionsNode.appendNode('exclusion')
-                                exclusionNode.appendNode('groupId', rule.group)
-                                exclusionNode.appendNode('artifactId', rule.module)
+                groupId PROJ_GROUP
+                artifactId PROJ_ARTIFACTID
+                version PROJ_VERSION
+
+                artifact sourcesJar
+                artifact javadocJar
+                artifact "${project.buildDir}/outputs/aar/${project.name}-release.aar"
+
+                pom.withXml {
+                    def root = asNode()
+                    def dependenciesNode = root.appendNode('dependencies')
+                    configurations.each { configuration ->
+                        configuration.allDependencies.findAll { it.name != 'unspecified' && it.name != null }.each {
+                            def dependencyNode = dependenciesNode.appendNode('dependency')
+                            dependencyNode.appendNode('groupId', it.group)
+                            dependencyNode.appendNode('artifactId', it.name)
+                            dependencyNode.appendNode('version', it.version)
+
+                            if (it.excludeRules.size() > 0) {
+                                def exclusionsNode = dependencyNode.appendNode('exclusions')
+                                it.excludeRules.each { rule ->
+                                    def exclusionNode = exclusionsNode.appendNode('exclusion')
+                                    exclusionNode.appendNode('groupId', rule.group)
+                                    exclusionNode.appendNode('artifactId', rule.module)
+                                }
                             }
                         }
                     }
+                    root.appendNode('description', PROJ_DESCRIPTION)
+                    root.children().last() + pomConfig
                 }
-                root.appendNode('description', PROJ_DESCRIPTION)
-                root.children().last() + pomConfig
             }
         }
 
-        jarPublication(MavenPublication) {
+        if (publicType == "jar" || publicType == "all") {
+            jarPublication(MavenPublication) {
 
-            groupId PROJ_GROUP
-            artifactId PROJ_ARTIFACTID
-            version PROJ_VERSION
+                groupId PROJ_GROUP
+                artifactId PROJ_ARTIFACTID
+                version PROJ_VERSION
 
-            artifact sourcesJar
-            artifact javadocJar
-            artifact "${project.buildDir}/intermediates/bundles/release/classes.jar"
+                artifact sourcesJar
+                artifact javadocJar
 
-            pom.withXml {
-                def root = asNode()
-                def dependenciesNode = root.appendNode('dependencies')
-                configurations.each { configuration ->
-                    configuration.allDependencies.findAll { it.name != 'unspecified' && it.name != null }.each {
-                        def dependencyNode = dependenciesNode.appendNode('dependency')
-                        dependencyNode.appendNode('groupId', it.group)
-                        dependencyNode.appendNode('artifactId', it.name)
-                        dependencyNode.appendNode('version', it.version)
+                println tasks.findByName("jar")
+                //artifact "${project.buildDir}/intermediates/bundles/release/classes.jar"
 
-                        if (it.excludeRules.size() > 0) {
-                            def exclusionsNode = dependencyNode.appendNode('exclusions')
-                            it.excludeRules.each { rule ->
-                                def exclusionNode = exclusionsNode.appendNode('exclusion')
-                                exclusionNode.appendNode('groupId', rule.group)
-                                exclusionNode.appendNode('artifactId', rule.module)
+
+                pom.withXml {
+                    def root = asNode()
+                    def dependenciesNode = root.appendNode('dependencies')
+                    configurations.each { configuration ->
+                        configuration.allDependencies.findAll { it.name != 'unspecified' && it.name != null }.each {
+                            def dependencyNode = dependenciesNode.appendNode('dependency')
+                            dependencyNode.appendNode('groupId', it.group)
+                            dependencyNode.appendNode('artifactId', it.name)
+                            dependencyNode.appendNode('version', it.version)
+
+                            if (it.excludeRules.size() > 0) {
+                                def exclusionsNode = dependencyNode.appendNode('exclusions')
+                                it.excludeRules.each { rule ->
+                                    def exclusionNode = exclusionsNode.appendNode('exclusion')
+                                    exclusionNode.appendNode('groupId', rule.group)
+                                    exclusionNode.appendNode('artifactId', rule.module)
+                                }
                             }
                         }
                     }
+                    root.appendNode('description', PROJ_DESCRIPTION)
+                    root.children().last() + pomConfig
                 }
-                root.appendNode('description', PROJ_DESCRIPTION)
-                root.children().last() + pomConfig
             }
         }
     }
@@ -170,7 +217,7 @@ bintray {
     def publicType = "all"
 
     if (project.hasProperty("publicType")) {
-        publicType = getProperty("publicType")
+        publicType = project.getProperty("publicType")
     }
 
     if (publicType == "all") {
