@@ -1,23 +1,5 @@
-version = PROJ_VERSION
-
 apply plugin: 'java'
 apply plugin: 'groovy'
-
-repositories {
-    jcenter()
-    mavenCentral()
-}
-
-buildscript {
-    repositories {
-        jcenter()
-        mavenCentral()
-    }
-    dependencies {
-        classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.0'
-        classpath 'com.github.dcendents:android-maven-plugin:1.2'
-    }
-}
 
 dependencies {
     compile gradleApi()
@@ -38,8 +20,4 @@ sourceSets {
     }
 }
 
-//if (gradle.startParameter.taskNames.any { it.contains("bintray") }) {
-//    apply from: 'https://raw.githubusercontent.com/cantalou/GradlePublic/master/bintray_2.gradle'
-//}
-
-apply from: './bintrayPlugin.gradle'
+apply from: './publish.gradle'
