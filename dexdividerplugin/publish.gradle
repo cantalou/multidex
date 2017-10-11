@@ -1,0 +1,39 @@
+buildscript {
+    repositories {
+        jcenter()
+        maven {
+            url "https://plugins.gradle.org/m2/"
+        }
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:2.2.0'
+        classpath "com.gradle.publish:plugin-publish-plugin:0.9.8"
+        //classpath "gradle.plugin.com.cantalou.gradle.dexDividerPlugin:dexdividerplugin:1.0.1"
+    }
+}
+
+
+apply plugin: "com.gradle.plugin-publish"
+
+group = "com.cantalou.gradle"
+version = "1.0.2"
+
+pluginBundle {
+    website = 'http://www.gradle.org/'
+    vcsUrl = 'https://github.com/gradle/gradle'
+    description = 'Gradle plugin for averaging dex method count excluded main dex file'
+    tags = ['average dex plugin']
+
+    plugins {
+        dexDividerPlugin {
+            id = 'com.cantalou.gradle.dexDividerPlugin'
+            displayName = 'dexDividerPlugin'
+        }
+    }
+
+    mavenCoordinates {
+        groupId = "com.cantalou.gradle"
+        artifactId = "dexDividerPlugin"
+        version = "1.0.2"
+    }
+}

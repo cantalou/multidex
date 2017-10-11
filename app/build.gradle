@@ -1,5 +1,5 @@
 apply plugin: 'com.android.application'
-apply plugin: com.cantalou.gradle.divider.DividerPlugin
+//apply plugin: 'com.cantalou.gradle.dexDividerPlugin'
 
 android {
     compileSdkVersion _compileSdkVersion

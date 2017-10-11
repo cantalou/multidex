@@ -36,8 +36,4 @@ sourceSets {
     }
 }
 
-//if (gradle.startParameter.taskNames.any { it.contains("bintray") }) {
-//    apply from: 'https://raw.githubusercontent.com/cantalou/GradlePublic/master/bintray_2.gradle'
-//}
-
-apply from: './bintray.gradle'
+apply from: './publish.gradle'
