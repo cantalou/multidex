@@ -17,7 +17,6 @@
 package android.support.multidex;
 
 import android.app.Application;
-import android.app.Instrumentation;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.os.Build;
@@ -32,9 +31,12 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -56,6 +58,8 @@ import dalvik.system.DexFile;
  * nothing on newer versions of the platform which provide built-in support for secondary dex files.
  */
 public final class MultiDex {
+
+    public static final Pattern CLASS_N_PATTERN = Pattern.compile("classes(?:[2-9]{0,1}|[1-9][0-9]+)\\.dex(\\.jar)?");
 
     static final String TAG = "MultiDex";
 
@@ -366,8 +370,11 @@ public final class MultiDex {
             throws IllegalArgumentException, IllegalAccessException, NoSuchFieldException,
             InvocationTargetException, NoSuchMethodException, IOException {
         if (!files.isEmpty()) {
+
             long start = System.currentTimeMillis();
-            if (Build.VERSION.SDK_INT >= 19) {
+            if (Build.VERSION.SDK_INT >= 23) {
+                V23.install(loader, files, dexDir);
+            } else if (Build.VERSION.SDK_INT >= 19) {
                 V19.install(loader, files, dexDir);
             } else if (Build.VERSION.SDK_INT >= 14) {
                 V14.install(loader, files, dexDir);
@@ -377,6 +384,7 @@ public final class MultiDex {
             Log.i(TAG, "Install dex file and dex opt success time : " + (System.currentTimeMillis() - start) + "ms, file :" + files);
         }
     }
+
 
     /**
      * Locates a given field anywhere in the class inheritance hierarchy.
@@ -517,6 +525,117 @@ public final class MultiDex {
         }
     }
 
+
+    private static List<File> createSortedAdditionalPathEntries(List<File> additionalPathEntries) {
+        final List<File> result = new ArrayList<>(additionalPathEntries);
+
+        final Map<String, Boolean> matchesClassNPatternMemo = new HashMap<>();
+        for (File file : result) {
+            final String name = file.getName();
+            matchesClassNPatternMemo.put(name, CLASS_N_PATTERN.matcher(name).matches());
+        }
+        Collections.sort(result, new Comparator<File>() {
+            @Override
+            public int compare(File lhs, File rhs) {
+                if (lhs == null && rhs == null) {
+                    return 0;
+                }
+                if (lhs == null) {
+                    return -1;
+                }
+                if (rhs == null) {
+                    return 1;
+                }
+
+                final String lhsName = lhs.getName();
+                final String rhsName = rhs.getName();
+                if (lhsName.equals(rhsName)) {
+                    return 0;
+                }
+
+                final boolean isLhsNameMatchClassN = matchesClassNPatternMemo.get(lhsName);
+                final boolean isRhsNameMatchClassN = matchesClassNPatternMemo.get(rhsName);
+                if (isLhsNameMatchClassN && isRhsNameMatchClassN) {
+                    final int lhsDotPos = lhsName.indexOf('.');
+                    final int rhsDotPos = rhsName.indexOf('.');
+                    final int lhsId = (lhsDotPos > 7 ? Integer.parseInt(lhsName.substring(7, lhsDotPos)) : 1);
+                    final int rhsId = (rhsDotPos > 7 ? Integer.parseInt(rhsName.substring(7, rhsDotPos)) : 1);
+                    return (lhsId == rhsId ? 0 : (lhsId < rhsId ? -1 : 1));
+                } else if (isLhsNameMatchClassN) {
+                    // Dex name that matches class N rules should always be at first.
+                    return -1;
+                } else if (isRhsNameMatchClassN) {
+                    return 1;
+                }
+                return lhsName.compareTo(rhsName);
+            }
+        });
+
+        return result;
+    }
+
+    /**
+     * Installer for platform versions 23.
+     */
+    private static final class V23 {
+
+        private static void install(ClassLoader loader, List<? extends File> additionalClassPathEntries,
+                                    File optimizedDirectory)
+                throws IllegalArgumentException, IllegalAccessException,
+                NoSuchFieldException, InvocationTargetException, NoSuchMethodException, IOException {
+            /* The patched class loader is expected to be a descendant of
+             * dalvik.system.BaseDexClassLoader. We modify its
+             * dalvik.system.DexPathList pathList field to append additional DEX
+             * file entries.
+             */
+            Field pathListField = findField(loader, "pathList");
+            Object dexPathList = pathListField.get(loader);
+            ArrayList<IOException> suppressedExceptions = new ArrayList<IOException>();
+            expandFieldArray(dexPathList, "dexElements", makePathElements(dexPathList,
+                    new ArrayList<File>(additionalClassPathEntries), optimizedDirectory,
+                    suppressedExceptions));
+            if (suppressedExceptions.size() > 0) {
+                for (IOException e : suppressedExceptions) {
+                    Log.w(TAG, "Exception in makePathElement", e);
+                    throw e;
+                }
+
+            }
+        }
+
+        /**
+         * A wrapper around
+         * {@code private static final dalvik.system.DexPathList#makePathElements}.
+         */
+        private static Object[] makePathElements(
+                Object dexPathList, ArrayList<? extends File> files, File optimizedDirectory,
+                ArrayList<IOException> suppressedExceptions)
+                throws IllegalAccessException, InvocationTargetException, NoSuchMethodException {
+
+            Method makePathElements;
+            try {
+                makePathElements = findMethod(dexPathList, "makePathElements", List.class, File.class,
+                        List.class);
+            } catch (NoSuchMethodException e) {
+                Log.e(TAG, "NoSuchMethodException: makePathElements(List,File,List) failure");
+                try {
+                    makePathElements = findMethod(dexPathList, "makePathElements", ArrayList.class, File.class, ArrayList.class);
+                } catch (NoSuchMethodException e1) {
+                    Log.e(TAG, "NoSuchMethodException: makeDexElements(ArrayList,File,ArrayList) failure");
+                    try {
+                        Log.e(TAG, "NoSuchMethodException: try use v19 instead");
+                        return V19.makeDexElements(dexPathList, files, optimizedDirectory, suppressedExceptions);
+                    } catch (NoSuchMethodException e2) {
+                        Log.e(TAG, "NoSuchMethodException: makeDexElements(List,File,List) failure");
+                        throw e2;
+                    }
+                }
+            }
+
+            return (Object[]) makePathElements.invoke(dexPathList, files, optimizedDirectory, suppressedExceptions);
+        }
+    }
+
     /**
      * Installer for platform versions 19.
      */
@@ -570,7 +689,7 @@ public final class MultiDex {
          * {@code private static final dalvik.system.DexPathList#makeDexElements}.
          */
         private static Object[] makeDexElements(
-                Object dexPathList, ArrayList<File> files, File optimizedDirectory,
+                Object dexPathList, ArrayList<? extends File> files, File optimizedDirectory,
                 ArrayList<IOException> suppressedExceptions)
                 throws IllegalAccessException, InvocationTargetException,
                 NoSuchMethodException {

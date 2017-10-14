@@ -11,7 +11,7 @@ public class CountMethodTask extends DefaultTask {
 
     def variant
 
-    void setVariant(variant) {
+    public void setVariant(variant) {
         this.variant = variant
     }
 

@@ -40,4 +40,4 @@ android {
 
 }
 
-
+apply from : "https://raw.githubusercontent.com/cantalou/GradlePublic/master/bintray_2.gradle"
