@@ -239,7 +239,7 @@ public final class MultiDexExtractor {
         return computedValue;
     }
 
-    private static List<ExtractedDex> performExtractions(File sourceApk, File dexDir, final DexAsyncHandler dexAsyncHandler)
+    private static List<ExtractedDex> performExtractions(final File sourceApk, File dexDir, final DexAsyncHandler dexAsyncHandler)
             throws IOException {
 
         final String extractedFilePrefix = sourceApk.getName() + EXTRACTED_NAME_EXT;
@@ -261,7 +261,7 @@ public final class MultiDexExtractor {
             ExecutorService executor = null;
             ArrayList<Future<Void>> taskResult = null;
             if (dexFile != null && dexAsyncHandler != null) {
-                executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+                executor = Executors.newCachedThreadPool();
                 taskResult = new ArrayList<>();
             }
             while (dexFile != null) {

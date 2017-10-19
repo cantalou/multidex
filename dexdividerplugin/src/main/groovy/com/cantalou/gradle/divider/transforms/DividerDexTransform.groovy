@@ -53,7 +53,7 @@ public class DividerDexTransform extends DexTransform {
             mainDexClass << it
         }
 
-        //now only one file combined.jar
+        //now only one file named combined.jar
         File combinedJar
         for (TransformInput input : invocation.getInputs()) {
             for (JarInput jarInput : input.getJarInputs()) {
@@ -124,7 +124,7 @@ public class DividerDexTransform extends DexTransform {
             if (config.dexMethodCount > 0) {
                 additionalParameters.removeAll { it.contains("set-max-idx-number") }
                 additionalParameters.add("--set-max-idx-number=" + config.dexMethodCount)
-                println "Add DexOptions set-max-idx-number value ${config.dexMethodCount}"
+                println "Add DexOptions set-max-idx-number value ${config.dexMethodCount} for spliting secondary dex"
             }
             tempDexOptions.additionalParameters = additionalParameters
 

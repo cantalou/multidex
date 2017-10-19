@@ -1,22 +1,16 @@
-package com.cantalou.gradle.divider.tasks
+package com.cantalou.gradle.divider.util
 
 import com.cantalou.gradle.divider.configuration.Config
 import com.cantalou.gradle.divider.dexcount.dexdeps.DexData
 import com.cantalou.gradle.divider.extension.DividerConfigExtension
-import org.gradle.api.DefaultTask
-import org.gradle.api.tasks.TaskAction
+import org.gradle.api.Project
 
+/**
+ * Calculate the total method count of dex
+ */
+public class CountMethodUtil {
 
-public class CountMethodTask extends DefaultTask {
-
-    def variant
-
-    public void setVariant(variant) {
-        this.variant = variant
-    }
-
-    @TaskAction
-    void process() {
+    public static void process(Project project, String dirName) {
 
         DividerConfigExtension extension = project.getExtensions().findByName("dividerConfig")
 
@@ -25,7 +19,7 @@ public class CountMethodTask extends DefaultTask {
         if (extension.forceMethodCount > 0) {
             config.dexMethodCount = extension.forceMethodCount
         } else {
-            int totalMethodCount = countMethod(variant)
+            int totalMethodCount = countMethod(project, dirName)
             if (totalMethodCount == 0) {
                 config.dexMethodCount = extension.desiredDexMethodCount
             } else if (extension.forceDexCount > 0) {
@@ -34,7 +28,7 @@ public class CountMethodTask extends DefaultTask {
                 int dexCount = 2
                 while ((config.dexMethodCount = totalMethodCount / dexCount + extension.dexMethodCountPadding) > extension.desiredDexMethodCount) {
                     dexCount++
-                    if(dexCount > extension.desiredMaxDexCount){
+                    if (dexCount > extension.desiredMaxDexCount) {
                         config.dexMethodCount = extension.maxDexMethodCount
                         break
                     }
@@ -45,10 +39,10 @@ public class CountMethodTask extends DefaultTask {
         config.save()
     }
 
-    private countMethod(def variant) {
+    private static countMethod(Project project, String dirName) {
         int totalMethodCount = 0
         try {
-            File dexOutputDir = new File("${project.buildDir}/intermediates/transforms/dex/${variant.dirName}/folders/1000/1f/main")
+            File dexOutputDir = new File("${project.buildDir}/intermediates/transforms/dex/${dirName}/folders/1000/1f/main")
             if (!dexOutputDir.exists()) {
                 project.println "Build dex dir ${dexOutputDir} not exists"
                 return totalMethodCount
