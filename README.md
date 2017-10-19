@@ -1,4 +1,4 @@
-# multidex
+# Multidex 
 Fork from https://android.googlesource.com/platform/frameworks/multidex
 
 ## Introduction
@@ -9,12 +9,13 @@ Fork from https://android.googlesource.com/platform/frameworks/multidex
 ## Performance  
  Execute dex extract and dexopt with different solution
  ![image](https://github.com/cantalou/multidex/blob/master/app/PerformanceImproveInfo.png)
- Serial   551: Serial with main dex 50k method, second dex 50k method, third dex 10k method  
- Parallel 551: Parallel with main dex 50k method, second dex 50k method, third dex 10k method  
- Parallel 533: Parallel with main dex 50k method, second dex 30k method, third dex 30k method  
+ Serial   551: serial with main dex 50k method, second dex 50k method, third dex 10k method  
+ Parallel 551: parallel with main dex 50k method, second dex 50k method, third dex 10k method  
+ Parallel 533: parallel with main dex 50k method, second dex 30k method, third dex 30k method  
 
 ## How to use
 1. add miltidex lib dependency
    ```
 
    ```
+2. add dex divider plugin
