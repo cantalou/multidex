@@ -8,6 +8,9 @@ Fork from https://android.googlesource.com/platform/frameworks/multidex
 
 ## Performance  
  ![image](https://github.com/cantalou/multidex/blob/master/app/PerformanceImproveInfo.png)
+ Serial   551: Execute dex extract and dexopt serially with main dex 50k method, second dex 50k method, third dex 10k method  
+ Parallel 551: Execute dex extract and dexopt parallel with main dex 50k method, second dex 50k method, third dex 10k method  
+ Parallel 533: Execute dex extract and dexopt parallel with main dex 50k method, second dex 30k method, third dex 30k method  
 
 ## How to use
 1. add miltidex lib dependency
