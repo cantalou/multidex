@@ -1,10 +1,8 @@
 package com.cantalou.gradle.divider
 
 import com.android.build.gradle.internal.pipeline.TransformTask
-import com.cantalou.gradle.divider.configuration.Config
 import com.cantalou.gradle.divider.extension.DividerConfigExtension
-import com.cantalou.gradle.divider.util.CountMethodUtil
-import com.cantalou.gradle.divider.transforms.DividerDexTransform
+import com.cantalou.gradle.divider.transforms.DividerDexTransform2
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.Task
@@ -54,23 +52,29 @@ public class DividerPlugin implements Plugin<Project> {
 
                 Task transformDexTask = project.tasks.findByName("transformClassesWithDexFor${variantName}")
 
-                Config config = Config.getInstance(project)
-                if(config.dexMethodCount > 0){
-                    DividerDexTransform dividerDexTransform = new DividerDexTransform(project, transformDexTask.transform)
-                    def field = TransformTask.class.getDeclaredField("transform")
-                    field.setAccessible(true)
-                    field.set(transformDexTask, dividerDexTransform)
-                    project.println "Change transformClassesWithDexFor${variantName}'s transform to DividerDexTransform"
-                }
+                DividerDexTransform2 dividerDexTransform = new DividerDexTransform2(project, transformDexTask.transform)
+                def field = TransformTask.class.getDeclaredField("transform")
+                field.setAccessible(true)
+                field.set(transformDexTask, dividerDexTransform)
+                project.println "Change transformClassesWithDexFor${variantName}'s transform to DividerDexTransform2"
 
-                String taskName = "countMethodFor${variantName}"
-                Task countTask = project.tasks.create(taskName) {
-                    doLast {
-                        CountMethodUtil.process(project, variant.dirName)
-                    }
-                }
-                countTask.dependsOn transformDexTask
-                project.tasks.findByName("assemble${variantName}").dependsOn countTask.getPath()
+//                Config config = Config.getInstance(project)
+//                if(config.dexMethodCount > 0){
+//                    DividerDexTransform2 dividerDexTransform = new DividerDexTransform2(project, transformDexTask.transform)
+//                    def field = TransformTask.class.getDeclaredField("transform")
+//                    field.setAccessible(true)
+//                    field.set(transformDexTask, dividerDexTransform)
+//                    project.println "Change transformClassesWithDexFor${variantName}'s transform to DividerDexTransform"
+//                }
+//
+//                String taskName = "countMethodFor${variantName}"
+//                Task countTask = project.tasks.create(taskName) {
+//                    doLast {
+//                        DexHelper.process(project, variant.dirName)
+//                    }
+//                }
+//                countTask.dependsOn transformDexTask
+//                project.tasks.findByName("assemble${variantName}").dependsOn countTask.getPath()
             }
         }
     }

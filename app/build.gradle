@@ -1,9 +1,6 @@
 apply plugin: 'com.android.application'
-//apply plugin: 'com.cantalou.gradle.dexDividerPlugin'
-//
-//dividerConfig{
-//    forceDexCount = 2
-//}
+apply plugin: 'com.cantalou.gradle.dexDividerPlugin'
+
 
 android {
     compileSdkVersion _compileSdkVersion
@@ -17,7 +14,7 @@ android {
         versionName "1.0"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
         multiDexEnabled true
-        multiDexKeepProguard = file("multidex-config.pro")
+//        multiDexKeepProguard = file("multidex-config.pro")
     }
 
     dexOptions {

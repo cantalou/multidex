@@ -437,6 +437,17 @@ public class DexData {
         return methodRefs;
     }
 
+    /**
+     * Returns the list of all class name.
+     */
+    public String[] getAllClassName() {
+        String[] classNames = new String[mClassDefs.length];
+        for (int i = 0; i < mClassDefs.length; i++) {
+            ClassDefItem classItem = mClassDefs[i];
+            classNames[i] = classNameFromTypeIndex(classItem.classIdx);
+        }
+        return classNames;
+    }
 
     /*
      * =======================================================================
