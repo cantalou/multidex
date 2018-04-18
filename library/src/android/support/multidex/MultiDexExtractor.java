@@ -107,7 +107,7 @@ public final class MultiDexExtractor {
     public static List<? extends File> load(Context context, File sourceApk, File dexDir,
                                      String prefsKeyPrefix,
                                      boolean forceReload, DexAsyncHandler dexAsyncHandler) throws IOException {
-        Log.i(TAG, "MultiDexExtractor.load(" + sourceApk.getPath() + ", " + forceReload + ", " + prefsKeyPrefix + ")");
+        MultiDex.log("MultiDexExtractor.load(" + sourceApk.getPath() + ", " + forceReload + ", " + prefsKeyPrefix + ")");
 
         long currentCrc = getZipCrc(sourceApk);
 
@@ -120,22 +120,22 @@ public final class MultiDexExtractor {
         IOException releaseLockException = null;
         try {
             lockChannel = lockRaf.getChannel();
-            Log.i(TAG, "Blocking on lock " + lockFile.getPath());
+            MultiDex.log("Blocking on lock " + lockFile.getPath());
             cacheLock = lockChannel.lock();
-            Log.i(TAG, lockFile.getPath() + " locked");
+            MultiDex.log(lockFile.getPath() + " locked");
 
             if (!forceReload && !isModified(context, sourceApk, currentCrc, prefsKeyPrefix)) {
                 try {
                     files = loadExistingExtractions(context, sourceApk, dexDir, prefsKeyPrefix);
                 } catch (IOException ioe) {
-                    Log.w(TAG, "Failed to reload existing extracted secondary dex files,"
+                    MultiDex.log("Failed to reload existing extracted secondary dex files,"
                             + " falling back to fresh extraction", ioe);
                     files = performExtractions(sourceApk, dexDir, dexAsyncHandler);
                     putStoredApkInfo(context, prefsKeyPrefix, getTimeStamp(sourceApk), currentCrc,
                             files);
                 }
             } else {
-                Log.i(TAG, "Detected that extraction must be performed.");
+                MultiDex.log("Detected that extraction must be performed.");
                 files = performExtractions(sourceApk, dexDir, dexAsyncHandler);
                 putStoredApkInfo(context, prefsKeyPrefix, getTimeStamp(sourceApk), currentCrc,
                         files);
@@ -145,7 +145,7 @@ public final class MultiDexExtractor {
                 try {
                     cacheLock.release();
                 } catch (IOException e) {
-                    Log.e(TAG, "Failed to release lock on " + lockFile.getPath());
+                    MultiDex.log( "Failed to release lock on " + lockFile.getPath());
                     // Exception while releasing the lock is bad, we want to report it, but not at
                     // the price of overriding any already pending exception.
                     releaseLockException = e;
@@ -161,7 +161,7 @@ public final class MultiDexExtractor {
             throw releaseLockException;
         }
 
-        Log.i(TAG, "load found " + files.size() + " secondary dex files");
+        MultiDex.log("load found " + files.size() + " secondary dex files");
         return files;
     }
 
@@ -173,7 +173,7 @@ public final class MultiDexExtractor {
             Context context, File sourceApk, File dexDir,
             String prefsKeyPrefix)
             throws IOException {
-        Log.i(TAG, "loading existing secondary dex files");
+        MultiDex.log("loading existing secondary dex files");
 
         final String extractedFilePrefix = sourceApk.getName() + EXTRACTED_NAME_EXT;
         SharedPreferences multiDexPreferences = getMultiDexPreferences(context);
@@ -294,9 +294,9 @@ public final class MultiDexExtractor {
                         future.get();
                     }
                 } catch (InterruptedException e) {
-                    Log.w(TAG, "Failed to wait for all task competed", e);
+                    MultiDex.log("Failed to wait for all task competed", e);
                 } catch (ExecutionException e) {
-                    Log.w(TAG, "Failed to execute task ", e);
+                    MultiDex.log("Failed to execute task ", e);
                     Throwable cause = e.getCause();
                     if (cause instanceof IOException) {
                         throw (IOException) cause;
@@ -309,7 +309,7 @@ public final class MultiDexExtractor {
             try {
                 apk.close();
             } catch (IOException e) {
-                Log.w(TAG, "Failed to close resource", e);
+                MultiDex.log("Failed to close resource", e);
             }
         }
 
@@ -317,7 +317,7 @@ public final class MultiDexExtractor {
     }
 
     private static void extractEntry(String extractedFilePrefix, ZipFile apk, int secondaryNumber, ZipEntry dexFile, ExtractedDex extractedFile) throws IOException {
-        Log.i(TAG, "Extraction is needed for file " + extractedFile);
+        MultiDex.log("Extraction is needed for file " + extractedFile);
         int numAttempts = 0;
         boolean isExtractionSuccessful = false;
         while (numAttempts < MAX_EXTRACT_ATTEMPTS && !isExtractionSuccessful) {
@@ -334,18 +334,18 @@ public final class MultiDexExtractor {
                 isExtractionSuccessful = true;
             } catch (IOException e) {
                 isExtractionSuccessful = false;
-                Log.w(TAG, "Failed to read crc from " + extractedFile.getAbsolutePath(), e);
+                MultiDex.log("Failed to read crc from " + extractedFile.getAbsolutePath(), e);
             }
 
             // Log size and crc of the extracted zip file
-            Log.i(TAG, "Extraction " + (isExtractionSuccessful ? "succeeded" : "failed") +
+            MultiDex.log("Extraction " + (isExtractionSuccessful ? "succeeded" : "failed") +
                     " time " + (System.currentTimeMillis() - start) + "ms - length " + extractedFile.getAbsolutePath() + ": " +
                     extractedFile.length() + " - crc: " + extractedFile.crc);
             if (!isExtractionSuccessful) {
                 // Delete the extracted file
                 extractedFile.delete();
                 if (extractedFile.exists()) {
-                    Log.w(TAG, "Failed to delete corrupted secondary dex '" +
+                    MultiDex.log("Failed to delete corrupted secondary dex '" +
                             extractedFile.getPath() + "'");
                 }
             }
@@ -407,16 +407,16 @@ public final class MultiDexExtractor {
         };
         File[] files = dexDir.listFiles(filter);
         if (files == null) {
-            Log.w(TAG, "Failed to list secondary dex dir content (" + dexDir.getPath() + ").");
+            MultiDex.log("Failed to list secondary dex dir content (" + dexDir.getPath() + ").");
             return;
         }
         for (File oldFile : files) {
-            Log.i(TAG, "Trying to delete old file " + oldFile.getPath() + " of size " +
+            MultiDex.log("Trying to delete old file " + oldFile.getPath() + " of size " +
                     oldFile.length());
             if (!oldFile.delete()) {
-                Log.w(TAG, "Failed to delete old file " + oldFile.getPath());
+                MultiDex.log("Failed to delete old file " + oldFile.getPath());
             } else {
-                Log.i(TAG, "Deleted old file " + oldFile.getPath());
+                MultiDex.log("Deleted old file " + oldFile.getPath());
             }
         }
     }
@@ -429,7 +429,7 @@ public final class MultiDexExtractor {
         // Temp files must not start with extractedFilePrefix to get cleaned up in prepareDexDir()
         File tmp = File.createTempFile("tmp-" + extractedFilePrefix, EXTRACTED_SUFFIX,
                 extractTo.getParentFile());
-        Log.i(TAG, "Extracting " + tmp.getPath());
+        MultiDex.log("Extracting " + tmp.getPath());
         try {
             out = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(tmp)));
             try {
@@ -452,7 +452,7 @@ public final class MultiDexExtractor {
                 throw new IOException("Failed to mark readonly \"" + tmp.getAbsolutePath() +
                         "\" (tmp of \"" + extractTo.getAbsolutePath() + "\")");
             }
-            Log.i(TAG, "Renaming to " + extractTo.getPath());
+            MultiDex.log("Renaming to " + extractTo.getPath());
             if (!tmp.renameTo(extractTo)) {
                 throw new IOException("Failed to rename \"" + tmp.getAbsolutePath() +
                         "\" to \"" + extractTo.getAbsolutePath() + "\"");
@@ -470,7 +470,7 @@ public final class MultiDexExtractor {
         try {
             closeable.close();
         } catch (IOException e) {
-            Log.w(TAG, "Failed to close resource", e);
+            MultiDex.log("Failed to close resource", e);
         }
     }
 }
