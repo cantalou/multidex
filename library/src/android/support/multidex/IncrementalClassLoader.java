@@ -15,6 +15,8 @@
  */
 package android.support.multidex;
 
+import android.util.Log;
+
 import java.io.File;
 import java.lang.reflect.Field;
 import java.util.List;
@@ -39,9 +41,17 @@ public class IncrementalClassLoader extends ClassLoader {
         delegateClassLoader = createDelegateClassLoader(nativeLibraryPath, codeCacheDir, dexes, original);
     }
 
+    protected Class<?> loadClass(String className, boolean resolve) throws ClassNotFoundException {
+        Class clazz = super.loadClass(className, false);
+        //Log.d("IncrementalClassLoader","loadClass " + className + " from " + super.toString() + ", " + clazz);
+        return clazz;
+    }
+
     @Override
     public Class<?> findClass(String className) throws ClassNotFoundException {
-        return delegateClassLoader.findClass(className);
+        Class clazz = delegateClassLoader.findClass(className);
+        //Log.d("IncrementalClassLoader","findClass " + className + " from " + delegateClassLoader + ", " + clazz);
+        return clazz;
     }
 
     /**

@@ -5,15 +5,10 @@
     android:layout_height="match_parent"
     android:orientation="horizontal">
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Start consume time :"/>
-
-    <TextView
-        android:id="@+id/time"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text=""/>
+    <Button
+        android:id="@+id/load_dex"
+        android:layout_width="100dp"
+        android:layout_height="60dp"
+        android:text="Load dex"/>
 
 </LinearLayout>
