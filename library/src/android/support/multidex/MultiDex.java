@@ -20,6 +20,7 @@ import android.app.Application;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.os.Build;
+import android.text.TextUtils;
 import android.util.Log;
 
 import java.io.File;
@@ -289,16 +290,16 @@ public final class MultiDex {
                 });
                 installSecondaryDexes(loader, dexDir, files);
             }
-//            if (!files.isEmpty() && classNames.length > 0) {
-//                try {
-//                    for (String className : classNames) {
-//                        Class.forName(className);
-//                    }
-//                } catch (ClassNotFoundException e) {
-//                    log("Google multi dex installs error . Try inject classLoader .");
-//                    installSecondaryDexesByInjectClassLoader(loader, dexDir, files);
-//                }
-//            }
+            if (!files.isEmpty() && classNames.length > 0) {
+                try {
+                    for (String className : classNames) {
+                        Class.forName(className);
+                    }
+                } catch (ClassNotFoundException e) {
+                    log("Google multi dex installs error . Try inject classLoader ." + Log.getStackTraceString(e));
+                    installSecondaryDexesByInjectClassLoader(loader, dexDir, files);
+                }
+            }
 
         }
     }
@@ -370,6 +371,9 @@ public final class MultiDex {
         } catch (Exception e) {
             log("Failed to determine native library path " + e.getMessage());
         }
+        if (TextUtils.isEmpty(nativeLibraryPath) && Build.VERSION.SDK_INT <= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+            nativeLibraryPath = getLdLibraryPath(loader);
+        }
         IncrementalClassLoader.inject(loader, nativeLibraryPath, dexDir.getAbsolutePath(), filePaths);
     }
 
@@ -420,6 +424,20 @@ public final class MultiDex {
         }
 
         throw new NoSuchFieldException("Field " + name + " not found in " + instance.getClass());
+    }
+
+    /**
+     * Get value of a given field anywhere in the class inheritance hierarchy.
+     *
+     * @param instance an object to search the field into.
+     * @param name     field name
+     * @return a object
+     * @throws NoSuchFieldException if the field cannot be located
+     * @throws IllegalAccessException if the field cannot be accessed
+     */
+    private static Object getFieldValue(Object instance, String name) throws NoSuchFieldException, IllegalAccessException {
+        Field field = findField(instance,name);
+        return field.get(instance);
     }
 
     /**
@@ -811,5 +829,18 @@ public final class MultiDex {
         if (logger != null) {
             logger.log(msg + Log.getStackTraceString(throwable));
         }
+    }
+
+    public static String getLdLibraryPath(ClassLoader loader) throws NoSuchFieldException, IllegalAccessException {
+        Object pathList = getFieldValue(loader, "pathList");
+        File[] nativeLibraryDirectories = (File[]) getFieldValue(pathList, "nativeLibraryDirectories");
+        StringBuilder result = new StringBuilder();
+        for (File directory : nativeLibraryDirectories) {
+            if (result.length() > 0) {
+                result.append(':');
+            }
+            result.append(directory);
+        }
+        return result.toString();
     }
 }

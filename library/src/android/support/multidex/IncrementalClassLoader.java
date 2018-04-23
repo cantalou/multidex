@@ -15,6 +15,8 @@
  */
 package android.support.multidex;
 
+import android.util.Log;
+
 import java.io.File;
 import java.lang.reflect.Field;
 import java.util.List;
@@ -30,6 +32,8 @@ public class IncrementalClassLoader extends ClassLoader {
 
     private final DelegateClassLoader delegateClassLoader;
 
+    private BaseDexClassLoader originalClassLoader;
+
     public IncrementalClassLoader(
             ClassLoader original, String nativeLibraryPath, String codeCacheDir, List<String> dexes) {
         super(original.getParent());
@@ -37,6 +41,9 @@ public class IncrementalClassLoader extends ClassLoader {
         // everything works correctly. Investigate why that is the case so that the code can be
         // simplified.
         delegateClassLoader = createDelegateClassLoader(nativeLibraryPath, codeCacheDir, dexes, original);
+        if(original instanceof BaseDexClassLoader){
+            originalClassLoader = (BaseDexClassLoader)original;
+        }
     }
 
     @Override
@@ -104,5 +111,18 @@ public class IncrementalClassLoader extends ClassLoader {
         // (Note that ClassLoader2 in the above is generally the BootClassLoader, not containing
         // any classes we care about.)
         return incrementalClassLoader;
+    }
+
+    @Override
+    protected String findLibrary(String libName) {
+        try {
+            return super.findLibrary(libName);
+        } catch (Throwable e) {
+            Log.e("IncrementalClassLoader","findLibrary error", e);
+            if(originalClassLoader != null){
+                originalClassLoader.findLibrary(libName);
+            }
+        }
+        return "";
     }
 }
