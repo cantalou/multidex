@@ -121,11 +121,6 @@ public final class MultiDex {
 
     private static Logger logger;
 
-    /**
-     * The original Element[] array of DexPathList
-     */
-    private static HashMap<Object, Object[]> backupElements = new HashMap<>();
-
     private MultiDex() {
     }
 
@@ -166,8 +161,8 @@ public final class MultiDex {
                     + " is unsupported. Min SDK version is " + MIN_SDK_VERSION + ".");
         }
 
-        ApplicationInfo applicationInfo = getApplicationInfo(context);
         try {
+            ApplicationInfo applicationInfo = getApplicationInfo(context);
             if (applicationInfo == null) {
                 log("No ApplicationInfo available, i.e. running on a test Context:"
                         + " MultiDex support library is disabled.");
@@ -178,21 +173,11 @@ public final class MultiDex {
                     new File(applicationInfo.sourceDir),
                     new File(applicationInfo.dataDir),
                     CODE_CACHE_SECONDARY_FOLDER_NAME,
-                    NO_KEY_PREFIX, mode, false, classNames);
+                    NO_KEY_PREFIX, mode, classNames);
 
         } catch (Exception e) {
-            log("MultiDex installation failure, retry", e);
-            try {
-                restoreDexPathList(context.getClassLoader());
-                installedApk.remove(new File(applicationInfo.sourceDir));
-                doInstallation(context,
-                        new File(applicationInfo.sourceDir),
-                        new File(applicationInfo.dataDir),
-                        CODE_CACHE_SECONDARY_FOLDER_NAME,
-                        NO_KEY_PREFIX, mode, true, classNames);
-            } catch (Exception e1) {
-                throw new RuntimeException("MultiDex installation failed", e1);
-            }
+            log("MultiDex installation failure", e);
+            throw new RuntimeException("MultiDex installation failed (" + e.getMessage() + ").");
         }
         log("install done");
     }
@@ -207,7 +192,7 @@ public final class MultiDex {
      * @param mode
      */
     private static void doInstallation(Context mainContext, File sourceApk, File dataDir, String secondaryFolderName,
-                                       String prefsKeyPrefix, int mode, boolean forceReload, final String... classNames) throws IOException,
+                                       String prefsKeyPrefix, int mode, final String... classNames) throws IOException,
             IllegalArgumentException, IllegalAccessException, NoSuchFieldException,
             InvocationTargetException, NoSuchMethodException {
         synchronized (installedApk) {
@@ -282,11 +267,11 @@ public final class MultiDex {
             List<? extends File> files = Collections.emptyList();
             Log.i(TAG, "Use mode " + Integer.toBinaryString(mode) + " to load extract and dex opt");
             if (mode == MODE_SERIAL) {
-                files = MultiDexExtractor.load(mainContext, sourceApk, dexDir, prefsKeyPrefix, forceReload || testMode, null);
-                installSecondaryDexes(loader, dexDir, files, classNames);
+                files = MultiDexExtractor.load(mainContext, sourceApk, dexDir, prefsKeyPrefix, false || testMode, null);
+                installSecondaryDexes(loader, dexDir, files);
             } else if ((mode & MODE_EXTRACT_PARALLEL) == MODE_EXTRACT_PARALLEL) {
                 final int finalMode = mode;
-                files = MultiDexExtractor.load(mainContext, sourceApk, dexDir, prefsKeyPrefix, forceReload || testMode, new MultiDexExtractor.DexAsyncHandler() {
+                files = MultiDexExtractor.load(mainContext, sourceApk, dexDir, prefsKeyPrefix, false || testMode, new MultiDexExtractor.DexAsyncHandler() {
                     @Override
                     public void handle(File dexFile) throws Exception {
                         if ((finalMode & MODE_DEX_OPT_PARALLEL) == MODE_DEX_OPT_PARALLEL) {
@@ -302,8 +287,19 @@ public final class MultiDex {
                         }
                     }
                 });
-                installSecondaryDexes(loader, dexDir, files, classNames);
+                installSecondaryDexes(loader, dexDir, files);
             }
+//            if (!files.isEmpty() && classNames.length > 0) {
+//                try {
+//                    for (String className : classNames) {
+//                        Class.forName(className);
+//                    }
+//                } catch (ClassNotFoundException e) {
+//                    log("Google multi dex installs error . Try inject classLoader .");
+//                    installSecondaryDexesByInjectClassLoader(loader, dexDir, files);
+//                }
+//            }
+
         }
     }
 
@@ -377,36 +373,23 @@ public final class MultiDex {
         IncrementalClassLoader.inject(loader, nativeLibraryPath, dexDir.getAbsolutePath(), filePaths);
     }
 
-    public static void installSecondaryDexes(ClassLoader loader, File dexDir, List<? extends File> files, final String... classNames)
+    public static void installSecondaryDexes(ClassLoader loader, File dexDir,
+                                             List<? extends File> files)
             throws IllegalArgumentException, IllegalAccessException, NoSuchFieldException,
             InvocationTargetException, NoSuchMethodException, IOException {
         if (!files.isEmpty()) {
             long start = System.currentTimeMillis();
-            try {
-//                if (Build.VERSION.SDK_INT >= 23) {
-//                    V23.install(loader, files, dexDir);
-//                } else if (Build.VERSION.SDK_INT >= 19) {
-//                    V19.install(loader, files, dexDir);
-//                } else if (Build.VERSION.SDK_INT >= 14) {
-//                    V14.install(loader, files, dexDir);
-//                } else {
-//                    V4.install(loader, files);
-//                }
-            } finally {
-                if (classNames != null && classNames.length > 0) {
-                    try {
-                        for (String className : classNames) {
-                            loader.loadClass(className);
-                        }
-                    } catch (ClassNotFoundException e) {
-                        log("Google multi dex installs error " + Log.getStackTraceString(e) + ". Try inject classLoader .");
-                        restoreDexPathList(loader);
-                        installSecondaryDexesByInjectClassLoader(loader, dexDir, files);
-                    }
-                }
+            if (Build.VERSION.SDK_INT >= 23) {
+                V23.install(loader, files, dexDir);
+            } else if (Build.VERSION.SDK_INT >= 19) {
+                V19.install(loader, files, dexDir);
+            } else if (Build.VERSION.SDK_INT >= 14) {
+                V14.install(loader, files, dexDir);
+            } else {
+                V4.install(loader, files);
             }
             log("Install dex file and dex opt success time : " + (System.currentTimeMillis() - start) + "ms, file :" + files);
-        } else {
+        }else{
             log("Install dex files were empty");
         }
     }
@@ -482,14 +465,12 @@ public final class MultiDex {
             IllegalAccessException {
         Field jlrField = findField(instance, fieldName);
         Object[] original = (Object[]) jlrField.get(instance);
-        backupElements.put(instance, original);
         Object[] combined = (Object[]) Array.newInstance(
                 original.getClass()
                         .getComponentType(), original.length + extraElements.length);
         System.arraycopy(original, 0, combined, 0, original.length);
         System.arraycopy(extraElements, 0, combined, original.length, extraElements.length);
         jlrField.set(instance, combined);
-        log("Replace elements " + toString(original) + "of instance " + instance + " by " + toString(combined));
     }
 
     private static void clearOldDexDir(Context context) throws Exception {
@@ -829,37 +810,6 @@ public final class MultiDex {
         Log.e(TAG, msg, throwable);
         if (logger != null) {
             logger.log(msg + Log.getStackTraceString(throwable));
-        }
-    }
-
-    public static String toString(Object objects) {
-        Class<?> objectsClass = objects.getClass();
-        if (objectsClass.isArray()) {
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0, len = Array.getLength(objects); i < len; i++) {
-                sb.append(Array.get(objects, i));
-            }
-            return sb.toString();
-        } else {
-            return objects.toString();
-        }
-    }
-
-    /**
-     * Unsupported platform versions below 14
-     *
-     * @param loader
-     */
-    public static void restoreDexPathList(ClassLoader loader) throws IllegalAccessException, NoSuchFieldException {
-
-        Field pathListField = findField(loader, "pathList");
-        Object pathList = pathListField.get(loader);
-
-        Object[] backupElement = backupElements.get(pathList);
-        if (backupElement != null) {
-            Field dexElements = findField(pathList, "dexElements");
-            log("Restore elements " + toString(dexElements.get(pathList)) + "of instance " + pathList + " to " + toString(backupElement));
-            dexElements.set(pathList, backupElement);
         }
     }
 }
