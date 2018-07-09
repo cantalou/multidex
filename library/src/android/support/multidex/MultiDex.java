@@ -197,7 +197,7 @@ public final class MultiDex {
     }
 
     /**
-     * MultiDex installation failed (/data/data/com.m4399.gamecenter/code_cache/secondary-dexes/MultiDex.lock: open failed: EROFS (Read-only file system)).
+     * MultiDex installation failed (/data/data/[package name]/code_cache/secondary-dexes/MultiDex.lock: open failed: EROFS (Read-only file system)).
      *
      * @param context
      * @param mode
