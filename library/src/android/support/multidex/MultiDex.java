@@ -22,8 +22,10 @@ import android.content.pm.ApplicationInfo;
 import android.os.Build;
 import android.text.TextUtils;
 import android.util.Log;
+import android.util.SparseArray;
 
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
@@ -31,13 +33,11 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.ListIterator;
-import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -59,8 +59,6 @@ import dalvik.system.DexFile;
  * nothing on newer versions of the platform which provide built-in support for secondary dex files.
  */
 public final class MultiDex {
-
-    public static final Pattern CLASS_N_PATTERN = Pattern.compile("classes(?:[2-9]{0,1}|[1-9][0-9]+)\\.dex(\\.jar)?");
 
     static final String TAG = "MultiDex";
 
@@ -84,6 +82,8 @@ public final class MultiDex {
 
     public static final boolean IS_VM_MULTIDEX_CAPABLE =
             isVMMultidexCapable(System.getProperty("java.vm.version"));
+
+    private static final String FIELD_NAME_PATH_LIST = "pathList";
 
     /**
      * test mode: Delete cached dex file and zip file every time when install method called
@@ -122,6 +122,13 @@ public final class MultiDex {
 
     private static Logger logger;
 
+    /**
+     * use lock
+     */
+    public static boolean useLock = true;
+
+    private static SparseArray<Object> originalDexElements = new SparseArray<>();
+
     private MultiDex() {
     }
 
@@ -136,6 +143,7 @@ public final class MultiDex {
      *                          extension.
      */
     public static void install(Context context) {
+        useLock = true;
         install(context, MODE_AUTO);
     }
 
@@ -162,14 +170,14 @@ public final class MultiDex {
                     + " is unsupported. Min SDK version is " + MIN_SDK_VERSION + ".");
         }
 
-        try {
-            ApplicationInfo applicationInfo = getApplicationInfo(context);
-            if (applicationInfo == null) {
-                log("No ApplicationInfo available, i.e. running on a test Context:"
-                        + " MultiDex support library is disabled.");
-                return;
-            }
+        ApplicationInfo applicationInfo = getApplicationInfo(context);
+        if (applicationInfo == null) {
+            log("No ApplicationInfo available, i.e. running on a test Context:"
+                    + " MultiDex support library is disabled.");
+            return;
+        }
 
+        try {
             doInstallation(context,
                     new File(applicationInfo.sourceDir),
                     new File(applicationInfo.dataDir),
@@ -177,10 +185,53 @@ public final class MultiDex {
                     NO_KEY_PREFIX, mode, classNames);
 
         } catch (Exception e) {
-            log("MultiDex installation failure", e);
-            throw new RuntimeException("MultiDex installation failed (" + e.getMessage() + ").");
+            String msg = Log.getStackTraceString(e);
+            log("MultiDex installation failure, " + msg);
+            if (msg.contains("Read-only")) {
+                handleReadOnlyFileSystem(context, mode, applicationInfo, e, msg, classNames);
+            } else {
+                throw new RuntimeException("MultiDex installation failed (" + e.getMessage() + ").", e);
+            }
         }
         log("install done");
+    }
+
+    /**
+     * MultiDex installation failed (/data/data/com.m4399.gamecenter/code_cache/secondary-dexes/MultiDex.lock: open failed: EROFS (Read-only file system)).
+     *
+     * @param context
+     * @param mode
+     * @param applicationInfo
+     * @param e
+     * @param msg
+     * @param classNames
+     */
+    private static void handleReadOnlyFileSystem(Context context, int mode, ApplicationInfo applicationInfo, Exception e, String msg, String[] classNames) {
+        try {
+            log("MultiDex installation failure , try to install without lock ");
+            useLock = false;
+            doInstallation(context,
+                    new File(applicationInfo.sourceDir),
+                    new File(applicationInfo.dataDir),
+                    CODE_CACHE_SECONDARY_FOLDER_NAME,
+                    NO_KEY_PREFIX, mode, classNames);
+        } catch (Exception e1) {
+            throw new RuntimeException("MultiDex installation failed (" + e.getMessage() + ")." + msg, e);
+        }
+    }
+
+    /**
+     * restore classLoader
+     *
+     * @param classLoader
+     */
+    public static void restore(ClassLoader classLoader) throws NoSuchFieldException, IllegalAccessException {
+        Object originalDexElement = originalDexElements.get(classLoader.hashCode());
+        if (originalDexElement != null) {
+            Object dexPathList = getFieldValue(classLoader, FIELD_NAME_PATH_LIST);
+            Field dexElementsField = findField(dexPathList, "dexElements");
+            dexElementsField.set(dexPathList, originalDexElement);
+        }
     }
 
     /**
@@ -266,7 +317,7 @@ public final class MultiDex {
                 log("CUP core number is " + count + ", choose mode " + (count > 1 ? "MODE_PARALLEL" : "MODE_SERIAL"));
             }
             List<? extends File> files = Collections.emptyList();
-            Log.i(TAG, "Use mode " + Integer.toBinaryString(mode) + " to load extract and dex opt");
+            log("Use mode " + Integer.toBinaryString(mode) + " to load extract and dex opt");
             if (mode == MODE_SERIAL) {
                 files = MultiDexExtractor.load(mainContext, sourceApk, dexDir, prefsKeyPrefix, false || testMode, null);
                 installSecondaryDexes(loader, dexDir, files);
@@ -293,14 +344,13 @@ public final class MultiDex {
             if (!files.isEmpty() && classNames.length > 0) {
                 try {
                     for (String className : classNames) {
-                        Class.forName(className);
+                        loader.loadClass(className);
                     }
                 } catch (ClassNotFoundException e) {
                     log("Google multi dex installs error . Try inject classLoader ." + Log.getStackTraceString(e));
                     installSecondaryDexesByInjectClassLoader(loader, dexDir, files);
                 }
             }
-
         }
     }
 
@@ -369,19 +419,21 @@ public final class MultiDex {
                                                .getMethod("getLdLibraryPath", new Class[0])
                                                .invoke(loader, new Object[0]);
         } catch (Exception e) {
-            log("Failed to determine native library path " + e.getMessage());
+            log("Failed to determine native library path " + Log.getStackTraceString(e));
         }
         if (TextUtils.isEmpty(nativeLibraryPath) && Build.VERSION.SDK_INT <= Build.VERSION_CODES.JELLY_BEAN_MR1) {
             nativeLibraryPath = getLdLibraryPath(loader);
+            log("Default getLdLibraryPath from ClassLoader return null , try custom getLdLibraryPath return" + nativeLibraryPath);
         }
+        restore(loader);
         IncrementalClassLoader.inject(loader, nativeLibraryPath, dexDir.getAbsolutePath(), filePaths);
     }
 
-    public static void installSecondaryDexes(ClassLoader loader, File dexDir,
-                                             List<? extends File> files)
+    public static void installSecondaryDexes(ClassLoader loader, File dexDir, List<? extends File> files)
             throws IllegalArgumentException, IllegalAccessException, NoSuchFieldException,
             InvocationTargetException, NoSuchMethodException, IOException {
         if (!files.isEmpty()) {
+            originalDexElements.put(loader.hashCode(), getFieldValue(getFieldValue(loader, FIELD_NAME_PATH_LIST), "dexElements"));
             long start = System.currentTimeMillis();
             if (Build.VERSION.SDK_INT >= 23) {
                 V23.install(loader, files, dexDir);
@@ -393,7 +445,7 @@ public final class MultiDex {
                 V4.install(loader, files);
             }
             log("Install dex file and dex opt success time : " + (System.currentTimeMillis() - start) + "ms, file :" + files);
-        }else{
+        } else {
             log("Install dex files were empty");
         }
     }
@@ -412,7 +464,6 @@ public final class MultiDex {
             try {
                 Field field = clazz.getDeclaredField(name);
 
-
                 if (!field.isAccessible()) {
                     field.setAccessible(true);
                 }
@@ -427,17 +478,16 @@ public final class MultiDex {
     }
 
     /**
-     * Get value of a given field anywhere in the class inheritance hierarchy.
+     * Get value of given field anywhere in the class inheritance hierarchy.
      *
      * @param instance an object to search the field into.
      * @param name     field name
      * @return a object
-     * @throws NoSuchFieldException if the field cannot be located
+     * @throws NoSuchFieldException   if the field cannot be located
      * @throws IllegalAccessException if the field cannot be accessed
      */
     private static Object getFieldValue(Object instance, String name) throws NoSuchFieldException, IllegalAccessException {
-        Field field = findField(instance,name);
-        return field.get(instance);
+        return findField(instance, name).get(instance);
     }
 
     /**
@@ -497,7 +547,7 @@ public final class MultiDex {
             log("Clearing old secondary dex dir (" + dexDir.getPath() + ").");
             File[] files = dexDir.listFiles();
             if (files == null) {
-                Log.w(TAG, "Failed to list secondary dex dir content (" + dexDir.getPath() + ").");
+                log("Failed to list secondary dex dir content (" + dexDir.getPath() + ").");
                 return;
             }
             for (File oldFile : files) {
@@ -527,6 +577,7 @@ public final class MultiDex {
              * files on disk if the device ever updates to android 5+. But since this seems to
              * happen only on some devices running android 2, this should cause no pollution.
              */
+            log("getDexDir try to mkdir checked error ", e);
             cache = new File(context.getFilesDir(), CODE_CACHE_NAME);
             mkdirChecked(cache);
         }
@@ -551,57 +602,21 @@ public final class MultiDex {
             }
             throw new IOException("Failed to create directory " + dir.getPath());
         }
-    }
 
-
-    private static List<File> createSortedAdditionalPathEntries(List<File> additionalPathEntries) {
-        final List<File> result = new ArrayList<>(additionalPathEntries);
-
-        final Map<String, Boolean> matchesClassNPatternMemo = new HashMap<>();
-        for (File file : result) {
-            final String name = file.getName();
-            matchesClassNPatternMemo.put(name, CLASS_N_PATTERN.matcher(name)
-                                                              .matches());
-        }
-        Collections.sort(result, new Comparator<File>() {
-            @Override
-            public int compare(File lhs, File rhs) {
-                if (lhs == null && rhs == null) {
-                    return 0;
-                }
-                if (lhs == null) {
-                    return -1;
-                }
-                if (rhs == null) {
-                    return 1;
-                }
-
-                final String lhsName = lhs.getName();
-                final String rhsName = rhs.getName();
-                if (lhsName.equals(rhsName)) {
-                    return 0;
-                }
-
-                final boolean isLhsNameMatchClassN = matchesClassNPatternMemo.get(lhsName);
-                final boolean isRhsNameMatchClassN = matchesClassNPatternMemo.get(rhsName);
-                if (isLhsNameMatchClassN && isRhsNameMatchClassN) {
-                    final int lhsDotPos = lhsName.indexOf('.');
-                    final int rhsDotPos = rhsName.indexOf('.');
-                    final int lhsId = (lhsDotPos > 7 ? Integer.parseInt(lhsName.substring(7, lhsDotPos)) : 1);
-                    final int rhsId = (rhsDotPos > 7 ? Integer.parseInt(rhsName.substring(7, rhsDotPos)) : 1);
-                    return (lhsId == rhsId ? 0 : (lhsId < rhsId ? -1 : 1));
-                } else if (isLhsNameMatchClassN) {
-                    // Dex name that matches class N rules should always be at first.
-                    return -1;
-                } else if (isRhsNameMatchClassN) {
-                    return 1;
-                }
-                return lhsName.compareTo(rhsName);
+        //check write permission
+        if (useLock) {
+            File tempFile = new File(dir, "temp");
+            try {
+                FileWriter fw = new FileWriter(tempFile);
+                fw.write("1");
+                fw.close();
+            } finally {
+                tempFile.delete();
             }
-        });
+        }
 
-        return result;
     }
+
 
     /**
      * Installer for platform versions 23.
@@ -617,7 +632,7 @@ public final class MultiDex {
              * dalvik.system.DexPathList pathList field to append additional DEX
              * file entries.
              */
-            Field pathListField = findField(loader, "pathList");
+            Field pathListField = findField(loader, FIELD_NAME_PATH_LIST);
             Object dexPathList = pathListField.get(loader);
             ArrayList<IOException> suppressedExceptions = new ArrayList<IOException>();
             expandFieldArray(dexPathList, "dexElements", makePathElements(dexPathList,
@@ -679,7 +694,7 @@ public final class MultiDex {
              * dalvik.system.DexPathList pathList field to append additional DEX
              * file entries.
              */
-            Field pathListField = findField(loader, "pathList");
+            Field pathListField = findField(loader, FIELD_NAME_PATH_LIST);
             Object dexPathList = pathListField.get(loader);
             ArrayList<IOException> suppressedExceptions = new ArrayList<IOException>();
             expandFieldArray(dexPathList, "dexElements", makeDexElements(dexPathList,
@@ -750,7 +765,7 @@ public final class MultiDex {
              * dalvik.system.DexPathList pathList field to append additional DEX
              * file entries.
              */
-            Field pathListField = findField(loader, "pathList");
+            Field pathListField = findField(loader, FIELD_NAME_PATH_LIST);
             Object dexPathList = pathListField.get(loader);
             expandFieldArray(dexPathList, "dexElements", makeDexElements(dexPathList,
                     new ArrayList<File>(additionalClassPathEntries), optimizedDirectory));
@@ -832,14 +847,19 @@ public final class MultiDex {
     }
 
     public static String getLdLibraryPath(ClassLoader loader) throws NoSuchFieldException, IllegalAccessException {
-        Object pathList = getFieldValue(loader, "pathList");
-        File[] nativeLibraryDirectories = (File[]) getFieldValue(pathList, "nativeLibraryDirectories");
+        Object pathList = getFieldValue(loader, MultiDex.FIELD_NAME_PATH_LIST);
+        Object nativeLibraryDirectories = getFieldValue(pathList, "nativeLibraryDirectories");
         StringBuilder result = new StringBuilder();
-        for (File directory : nativeLibraryDirectories) {
-            if (result.length() > 0) {
-                result.append(':');
+        if (nativeLibraryDirectories instanceof File[]) {
+            for (File directory : (File[]) nativeLibraryDirectories) {
+                result.append(directory)
+                      .append(':');
             }
-            result.append(directory);
+        } else if (nativeLibraryDirectories instanceof Collection) {
+            for (Object directory : (Collection) nativeLibraryDirectories) {
+                result.append(directory)
+                      .append(':');
+            }
         }
         return result.toString();
     }

@@ -16,6 +16,7 @@
 
 buildscript {
     repositories {
+        google()
         maven {
             url uri('./repo')
         }
@@ -25,10 +26,9 @@ buildscript {
         }
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:2.2.0'
+        classpath 'com.android.tools.build:gradle:3.1.1'
         classpath "com.gradle.publish:plugin-publish-plugin:0.9.7"
         classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.7'
-        classpath "com.cantalou.gradle:dexDividerPlugin:1.0.4"
     }
 }
 
@@ -41,6 +41,7 @@ allprojects {
 
     repositories {
         jcenter()
+        google()
     }
 
     tasks.withType(JavaCompile) {

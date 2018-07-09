@@ -19,7 +19,6 @@ package android.support.multidex;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Build;
-import android.util.Log;
 
 import java.io.BufferedOutputStream;
 import java.io.Closeable;
@@ -43,6 +42,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
+
+import static android.support.multidex.MultiDex.useLock;
 
 /**
  * Exposes application secondary dex files as files in the application data
@@ -105,24 +106,31 @@ public final class MultiDexExtractor {
      *                     secondary dex files
      */
     public static List<? extends File> load(Context context, File sourceApk, File dexDir,
-                                     String prefsKeyPrefix,
-                                     boolean forceReload, DexAsyncHandler dexAsyncHandler) throws IOException {
+                                            String prefsKeyPrefix,
+                                            boolean forceReload, DexAsyncHandler dexAsyncHandler) throws IOException {
         MultiDex.log("MultiDexExtractor.load(" + sourceApk.getPath() + ", " + forceReload + ", " + prefsKeyPrefix + ")");
 
         long currentCrc = getZipCrc(sourceApk);
 
         // Validity check and extraction must be done only while the lock file has been taken.
-        File lockFile = new File(dexDir, LOCK_FILENAME);
-        RandomAccessFile lockRaf = new RandomAccessFile(lockFile, "rw");
+        File lockFile = null;
+        RandomAccessFile lockRaf = null;
         FileChannel lockChannel = null;
         FileLock cacheLock = null;
+        if (useLock) {
+            lockFile = new File(dexDir, LOCK_FILENAME);
+            lockRaf = new RandomAccessFile(lockFile, "rw");
+        }
+
         List<ExtractedDex> files;
         IOException releaseLockException = null;
         try {
-            lockChannel = lockRaf.getChannel();
-            MultiDex.log("Blocking on lock " + lockFile.getPath());
-            cacheLock = lockChannel.lock();
-            MultiDex.log(lockFile.getPath() + " locked");
+            if (useLock) {
+                lockChannel = lockRaf.getChannel();
+                MultiDex.log("Blocking on lock " + lockFile.getPath());
+                cacheLock = lockChannel.lock();
+                MultiDex.log(lockFile.getPath() + " locked");
+            }
 
             if (!forceReload && !isModified(context, sourceApk, currentCrc, prefsKeyPrefix)) {
                 try {
@@ -141,20 +149,22 @@ public final class MultiDexExtractor {
                         files);
             }
         } finally {
-            if (cacheLock != null) {
-                try {
-                    cacheLock.release();
-                } catch (IOException e) {
-                    MultiDex.log( "Failed to release lock on " + lockFile.getPath());
-                    // Exception while releasing the lock is bad, we want to report it, but not at
-                    // the price of overriding any already pending exception.
-                    releaseLockException = e;
+            if (useLock) {
+                if (cacheLock != null) {
+                    try {
+                        cacheLock.release();
+                    } catch (IOException e) {
+                        MultiDex.log("Failed to release lock on " + lockFile.getPath());
+                        // Exception while releasing the lock is bad, we want to report it, but not at
+                        // the price of overriding any already pending exception.
+                        releaseLockException = e;
+                    }
                 }
+                if (lockChannel != null) {
+                    closeQuietly(lockChannel);
+                }
+                closeQuietly(lockRaf);
             }
-            if (lockChannel != null) {
-                closeQuietly(lockChannel);
-            }
-            closeQuietly(lockRaf);
         }
 
         if (releaseLockException != null) {
@@ -355,6 +365,15 @@ public final class MultiDexExtractor {
                     extractedFile.getAbsolutePath() + " for secondary dex (" +
                     secondaryNumber + ")");
         }
+    }
+
+
+    public static void clearStoredApkInfo(Context context, String keyPrefix) {
+        SharedPreferences prefs = getMultiDexPreferences(context);
+        SharedPreferences.Editor edit = prefs.edit();
+        edit.putLong(keyPrefix + KEY_TIME_STAMP, NO_VALUE);
+        edit.putLong(keyPrefix + KEY_CRC, NO_VALUE);
+        edit.commit();
     }
 
     /**

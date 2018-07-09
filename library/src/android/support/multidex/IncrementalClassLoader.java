@@ -15,13 +15,14 @@
  */
 package android.support.multidex;
 
-import android.util.Log;
 
 import java.io.File;
 import java.lang.reflect.Field;
 import java.util.List;
 
 import dalvik.system.BaseDexClassLoader;
+
+import static android.support.multidex.MultiDex.log;
 
 /**
  * A class loader that loads classes from any .dex file in a particular directory on the SD card.
@@ -32,36 +33,68 @@ public class IncrementalClassLoader extends ClassLoader {
 
     private final DelegateClassLoader delegateClassLoader;
 
-    private BaseDexClassLoader originalClassLoader;
-
-    public IncrementalClassLoader(
-            ClassLoader original, String nativeLibraryPath, String codeCacheDir, List<String> dexes) {
+    public IncrementalClassLoader(ClassLoader original, String nativeLibraryPath, String codeCacheDir, List<String> dexes) {
         super(original.getParent());
         // TODO(bazel-team): For some mysterious reason, we need to use two class loaders so that
         // everything works correctly. Investigate why that is the case so that the code can be
         // simplified.
         delegateClassLoader = createDelegateClassLoader(nativeLibraryPath, codeCacheDir, dexes, original);
-        if(original instanceof BaseDexClassLoader){
-            originalClassLoader = (BaseDexClassLoader)original;
-        }
+        //log("Create DelegateClassLoader " + delegateClassLoader);
+    }
+
+    @Override
+    public Class<?> loadClass(String className) throws ClassNotFoundException {
+        Class<?> result = super.loadClass(className);
+        //log("loadClass " + className + " from " + this + " return " + result);
+        return result;
     }
 
     @Override
     public Class<?> findClass(String className) throws ClassNotFoundException {
-        return delegateClassLoader.findClass(className);
+        Class<?> result = delegateClassLoader.findClass(className);
+        //log("findClass " + className + " from " + this + " return " + result);
+        return result;
     }
 
     /**
      * A class loader whose only purpose is to make {@code findClass()} public.
      */
     private static class DelegateClassLoader extends BaseDexClassLoader {
+
+        private BaseDexClassLoader originalClassLoader;
+
         private DelegateClassLoader(String dexPath, File optimizedDirectory, String libraryPath, ClassLoader parent) {
             super(dexPath, optimizedDirectory, libraryPath, parent);
+            if (parent instanceof BaseDexClassLoader) {
+                originalClassLoader = (BaseDexClassLoader) parent;
+            }
         }
 
         @Override
-        public Class<?> findClass(String name) throws ClassNotFoundException {
-            return super.findClass(name);
+        public Class<?> loadClass(String className) throws ClassNotFoundException {
+            Class<?> result = super.loadClass(className);
+            //log("loadClass " + className + " from " + this + " return " + result);
+            return result;
+        }
+
+        @Override
+        public Class<?> findClass(String className) throws ClassNotFoundException {
+            Class<?> result = super.findClass(className);
+            //log("findClass " + className + " from " + this + " return " + result);
+            return result;
+        }
+
+        @Override
+        public String findLibrary(String libName) {
+            try {
+                return super.findLibrary(libName);
+            } catch (Throwable e) {
+                log("IncrementalClassLoader findLibrary error", e);
+                if (originalClassLoader != null) {
+                    return originalClassLoader.findLibrary(libName);
+                }
+            }
+            return "";
         }
     }
 
@@ -91,9 +124,11 @@ public class IncrementalClassLoader extends ClassLoader {
 
     }
 
-    public static ClassLoader inject(ClassLoader classLoader, String nativeLibraryPath, String codeCacheDir, List<String> dexes) throws NoSuchFieldException, IllegalAccessException{
+    public static ClassLoader inject(ClassLoader classLoader, String nativeLibraryPath, String codeCacheDir, List<String> dexes) throws NoSuchFieldException, IllegalAccessException {
         IncrementalClassLoader incrementalClassLoader = new IncrementalClassLoader(classLoader, nativeLibraryPath, codeCacheDir, dexes);
+        log("Before Inject ClassLoader " + classLoader + " , parent " + classLoader.getParent());
         setParent(classLoader, incrementalClassLoader);
+        log("After Inject ClassLoader " + classLoader + " , parent " + classLoader.getParent());
         // This works as follows:
         // We're given the current class loader that's used to load the bootstrap application.
         // We have a new class loader which reads patches/overrides from the data directory
@@ -113,16 +148,4 @@ public class IncrementalClassLoader extends ClassLoader {
         return incrementalClassLoader;
     }
 
-    @Override
-    protected String findLibrary(String libName) {
-        try {
-            return super.findLibrary(libName);
-        } catch (Throwable e) {
-            Log.e("IncrementalClassLoader","findLibrary error", e);
-            if(originalClassLoader != null){
-                originalClassLoader.findLibrary(libName);
-            }
-        }
-        return "";
-    }
 }

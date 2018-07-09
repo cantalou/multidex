@@ -14,6 +14,6 @@
  * limitations under the License.
  */
 
-include ':support-multidex', ':app', ':dexdividerplugin'
-project(':support-multidex').projectDir = new File(rootDir, 'library')
+include ':android-support-multidex', ':app', ':dexdividerplugin'
+project(':android-support-multidex').projectDir = new File(rootDir, 'library')
 
