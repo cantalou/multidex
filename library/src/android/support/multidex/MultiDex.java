@@ -833,16 +833,18 @@ public final class MultiDex {
     }
 
     public static void log(String msg) {
-        Log.i(TAG, msg);
         if (logger != null) {
             logger.log(msg);
+        } else {
+            Log.i(TAG, msg);
         }
     }
 
     public static void log(String msg, Throwable throwable) {
-        Log.e(TAG, msg, throwable);
         if (logger != null) {
             logger.log(msg + Log.getStackTraceString(throwable));
+        } else {
+            Log.e(TAG, msg, throwable);
         }
     }
 
