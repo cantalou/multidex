@@ -20,6 +20,9 @@ import android.app.Application;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.os.Build;
+import android.support.multidex.handler.exception.ExceptionHandler;
+import android.support.multidex.handler.exception.impl.NoSpaceLeftOnDeviceHandler;
+import android.support.multidex.handler.exception.impl.ReadOnlySystemHandle;
 import android.text.TextUtils;
 import android.util.Log;
 import android.util.SparseArray;
@@ -129,6 +132,12 @@ public final class MultiDex {
 
     private static SparseArray<Object> originalDexElements = new SparseArray<>();
 
+    private static ArrayList<ExceptionHandler> handlers = new ArrayList<>();
+    static {
+        handlers.add(new ReadOnlySystemHandle());
+        handlers.add(new NoSpaceLeftOnDeviceHandler());
+    }
+
     private MultiDex() {
     }
 
@@ -187,37 +196,30 @@ public final class MultiDex {
         } catch (Exception e) {
             String msg = Log.getStackTraceString(e);
             log("MultiDex installation failure, " + msg);
-            if (msg.contains("Read-only")) {
-                handleReadOnlyFileSystem(context, mode, applicationInfo, e, msg, classNames);
+            boolean handled = false;
+            for (ExceptionHandler handler : handlers) {
+                if (handler.handle(context, e, msg)) {
+                    handled = true;
+                }
+            }
+            if (handled) {
+                try
+                {
+                    doInstallation(context,
+                            new File(applicationInfo.sourceDir),
+                            new File(applicationInfo.dataDir),
+                            CODE_CACHE_SECONDARY_FOLDER_NAME,
+                            NO_KEY_PREFIX, mode, classNames);
+                }
+                catch (Exception e1)
+                {
+                    throw new RuntimeException("MultiDex retry installation failed (" + msg + ").", e1);
+                }
             } else {
-                throw new RuntimeException("MultiDex installation failed (" + e.getMessage() + ").", e);
+                throw new RuntimeException("MultiDex installation failed (" + msg + ").");
             }
         }
         log("install done");
-    }
-
-    /**
-     * MultiDex installation failed (/data/data/[package name]/code_cache/secondary-dexes/MultiDex.lock: open failed: EROFS (Read-only file system)).
-     *
-     * @param context
-     * @param mode
-     * @param applicationInfo
-     * @param e
-     * @param msg
-     * @param classNames
-     */
-    private static void handleReadOnlyFileSystem(Context context, int mode, ApplicationInfo applicationInfo, Exception e, String msg, String[] classNames) {
-        try {
-            log("MultiDex installation failure , try to install without lock ");
-            useLock = false;
-            doInstallation(context,
-                    new File(applicationInfo.sourceDir),
-                    new File(applicationInfo.dataDir),
-                    CODE_CACHE_SECONDARY_FOLDER_NAME,
-                    NO_KEY_PREFIX, mode, classNames);
-        } catch (Exception e1) {
-            throw new RuntimeException("MultiDex installation failed (" + e.getMessage() + ")." + msg, e);
-        }
     }
 
     /**
@@ -253,7 +255,6 @@ public final class MultiDex {
                 if (installedApk.contains(sourceApk)) {
                     return;
                 }
-                installedApk.add(sourceApk);
             }
 
             if (Build.VERSION.SDK_INT > MAX_SUPPORTED_SDK_VERSION) {
@@ -351,6 +352,7 @@ public final class MultiDex {
                     installSecondaryDexesByInjectClassLoader(loader, dexDir, files);
                 }
             }
+            installedApk.add(sourceApk);
         }
     }
 

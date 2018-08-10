@@ -16,13 +16,20 @@
 
 package android.support.multidex;
 
+import android.content.Context;
+import android.support.test.InstrumentationRegistry;
+import android.support.test.runner.AndroidJUnit4;
+
 import org.junit.Assert;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 
 /**
  * Test for {@link MultiDex} class.
  */
+@RunWith(AndroidJUnit4.class)
 public class MultiDexTest {
+
     @Test
     public void testVersionCheck() {
         Assert.assertFalse(MultiDex.isVMMultidexCapable(null));
@@ -43,5 +50,16 @@ public class MultiDexTest {
         Assert.assertTrue(MultiDex.isVMMultidexCapable("3.1.0"));
         Assert.assertTrue(MultiDex.isVMMultidexCapable("03.1.132645"));
         Assert.assertTrue(MultiDex.isVMMultidexCapable("03.2"));
+    }
+
+    @Test
+    public void testReadOnlySystem(){
+        Context appContext = InstrumentationRegistry.getTargetContext();
+        MultiDex.install(appContext);
+    }
+
+    @Test
+    public void testNoSpaceLeftOnDevice(){
+
     }
 }

@@ -52,9 +52,6 @@ dependencies {
     compile 'com.github.bumptech.glide:volley-integration:1.2.2'
     compile 'com.mcxiaoke.volley:library:1.0.5'
     compile 'com.squareup.okhttp:okhttp:2.4.0'
-    compile('com.google.android.gms:play-services:9.4.0') {
-        exclude group: "com.android.support", module: "appcompat-v7"
-    }
     compile 'com.squareup.picasso:picasso:2.5.2'
     compile "com.squareup.retrofit:retrofit:1.4.1"
 

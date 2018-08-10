@@ -40,8 +40,8 @@ allprojects {
     }
 
     repositories {
-        jcenter()
         google()
+        jcenter()
     }
 
     tasks.withType(JavaCompile) {
