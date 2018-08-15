@@ -25,6 +25,7 @@ public class NoSpaceLeftOnDeviceHandler extends AbstractHandler {
             if (Environment.MEDIA_MOUNTED.equals(Environment.getExternalStorageState())) {
                 delete(context.getExternalCacheDir());
             }
+            MultiDex.useLock = false;
         } catch (Throwable e) {
             MultiDex.log("delete cache file error ", e);
         }
