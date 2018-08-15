@@ -42,6 +42,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipFile;
@@ -133,6 +134,7 @@ public final class MultiDex {
     private static SparseArray<Object> originalDexElements = new SparseArray<>();
 
     private static ArrayList<ExceptionHandler> handlers = new ArrayList<>();
+
     static {
         handlers.add(new ReadOnlySystemHandle());
         handlers.add(new NoSpaceLeftOnDeviceHandler());
@@ -203,16 +205,40 @@ public final class MultiDex {
                 }
             }
             if (handled) {
-                try
-                {
+                try {
+                    restore(context.getClassLoader());
                     doInstallation(context,
                             new File(applicationInfo.sourceDir),
                             new File(applicationInfo.dataDir),
                             CODE_CACHE_SECONDARY_FOLDER_NAME,
                             NO_KEY_PREFIX, mode, classNames);
+                } catch (Exception e1) {
+                    throw new RuntimeException("MultiDex retry installation failed (" + msg + ").", e1);
                 }
-                catch (Exception e1)
-                {
+            } else {
+                throw new RuntimeException("MultiDex installation failed (" + msg + ").");
+            }
+        }
+        log("install done");
+    }
+
+
+    public static void installWithExceptionHandle(Context context, Callable runnable) {
+        try {
+            runnable.call();
+        } catch (Exception e) {
+            String msg = Log.getStackTraceString(e);
+            log("MultiDex installation failure, " + msg);
+            boolean handled = false;
+            for (ExceptionHandler handler : handlers) {
+                if (handler.handle(context, e, msg)) {
+                    handled = true;
+                }
+            }
+            if (handled) {
+                try {
+                    runnable.call();
+                } catch (Exception e1) {
                     throw new RuntimeException("MultiDex retry installation failed (" + msg + ").", e1);
                 }
             } else {
