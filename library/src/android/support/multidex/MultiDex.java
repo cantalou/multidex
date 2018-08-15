@@ -154,7 +154,6 @@ public final class MultiDex {
      *                          extension.
      */
     public static void install(Context context) {
-        useLock = true;
         install(context, MODE_AUTO);
     }
 
