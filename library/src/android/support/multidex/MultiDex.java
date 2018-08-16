@@ -728,8 +728,11 @@ public final class MultiDex {
                     new ArrayList<File>(additionalClassPathEntries), optimizedDirectory,
                     suppressedExceptions));
             if (suppressedExceptions.size() > 0) {
+                RuntimeException exception = null;
                 for (IOException e : suppressedExceptions) {
-                    log("Exception in makeDexElement", e);
+                    log("Exception in makeDexElement \n", e);
+                    //normally only one exception
+                    exception = new RuntimeException("V19.install error", e);
                 }
                 Field suppressedExceptionsField =
                         findField(dexPathList, "dexElementsSuppressedExceptions");
@@ -751,6 +754,9 @@ public final class MultiDex {
                 }
 
                 suppressedExceptionsField.set(dexPathList, dexElementsSuppressedExceptions);
+                if(exception != null){
+                    throw exception;
+                }
             }
         }
 
