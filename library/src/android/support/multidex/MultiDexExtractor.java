@@ -468,7 +468,7 @@ public final class MultiDexExtractor {
                 out.close();
             }
             if (!tmp.setReadOnly()) {
-                throw new IOException("Failed to mark readonly \"" + tmp.getAbsolutePath() +
+                MultiDex.log("Failed to mark readonly \"" + tmp.getAbsolutePath() +
                         "\" (tmp of \"" + extractTo.getAbsolutePath() + "\")");
             }
             MultiDex.log("Renaming to " + extractTo.getPath());
