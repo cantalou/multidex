@@ -257,7 +257,9 @@ public final class MultiDex {
         if (originalDexElement != null) {
             Object dexPathList = getFieldValue(classLoader, FIELD_NAME_PATH_LIST);
             Field dexElementsField = findField(dexPathList, "dexElements");
+            log("before restore " + classLoader);
             dexElementsField.set(dexPathList, originalDexElement);
+            log("after restore " + classLoader);
         }
     }
 

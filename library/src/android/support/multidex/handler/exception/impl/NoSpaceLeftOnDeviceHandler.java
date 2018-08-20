@@ -6,6 +6,7 @@ import android.support.multidex.MultiDex;
 import android.support.multidex.handler.exception.AbstractHandler;
 
 import java.io.File;
+import java.io.FileFilter;
 
 /**
  * java.lang.RuntimeException: MultiDex installation failed (write failed: ENOSPC (No space left on device)).
@@ -21,9 +22,17 @@ public class NoSpaceLeftOnDeviceHandler extends AbstractHandler {
     @Override
     public boolean handle(Context context) {
         try {
-            delete(context.getCacheDir());
+            delete(context.getCacheDir(), null);
+            delete(context.getExternalCacheDir(), null);
             if (Environment.MEDIA_MOUNTED.equals(Environment.getExternalStorageState())) {
-                delete(context.getExternalCacheDir());
+                delete(context.getExternalCacheDir(), null);
+                delete(Environment.getExternalStorageDirectory(), new FileFilter() {
+                    @Override
+                    public boolean accept(File file) {
+                        String fileName = file.getName();
+                        return fileName.matches(".*(?i)(temp|cahce|log)(s?).*");
+                    }
+                });
             }
             MultiDex.useLock = false;
         } catch (Throwable e) {
@@ -32,7 +41,7 @@ public class NoSpaceLeftOnDeviceHandler extends AbstractHandler {
         return true;
     }
 
-    private void delete(File file) {
+    private void delete(File file, FileFilter fileFilter) {
 
         if (file == null) {
             return;
@@ -42,11 +51,17 @@ public class NoSpaceLeftOnDeviceHandler extends AbstractHandler {
             File[] files = file.listFiles();
             if (files != null) {
                 for (File subFile : files) {
-                    delete(subFile);
+                    if (fileFilter != null && fileFilter.accept(subFile)) {
+                        delete(subFile, null);
+                    } else {
+                        delete(subFile, fileFilter);
+                    }
                 }
             }
-        }else{
-            MultiDex.log("delete file " + file + " " + file.delete());
+        } else {
+            if (fileFilter == null || fileFilter.accept(file)) {
+                MultiDex.log("delete file " + file + " " + file.delete());
+            }
         }
     }
 }
