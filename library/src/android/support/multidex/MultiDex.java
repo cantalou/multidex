@@ -446,7 +446,7 @@ public final class MultiDex {
                                                .getMethod("getLdLibraryPath", new Class[0])
                                                .invoke(loader, new Object[0]);
         } catch (Exception e) {
-            log("Failed to determine native library path " + Log.getStackTraceString(e));
+            log("Failed to determine native library path " + e);
         }
         if (TextUtils.isEmpty(nativeLibraryPath) && Build.VERSION.SDK_INT <= Build.VERSION_CODES.JELLY_BEAN_MR1) {
             nativeLibraryPath = getLdLibraryPath(loader);
@@ -614,7 +614,9 @@ public final class MultiDex {
     }
 
     private static void mkdirChecked(File dir) throws IOException {
-        dir.mkdir();
+        if (!dir.exists()) {
+            dir.mkdir();
+        }
         if (!dir.isDirectory()) {
             File parent = dir.getParentFile();
             if (parent == null) {
@@ -754,7 +756,7 @@ public final class MultiDex {
                 }
 
                 suppressedExceptionsField.set(dexPathList, dexElementsSuppressedExceptions);
-                if(exception != null){
+                if (exception != null) {
                     throw exception;
                 }
             }
