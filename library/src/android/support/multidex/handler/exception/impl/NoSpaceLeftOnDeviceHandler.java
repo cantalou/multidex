@@ -30,7 +30,7 @@ public class NoSpaceLeftOnDeviceHandler extends AbstractHandler {
                     @Override
                     public boolean accept(File file) {
                         String fileName = file.getName();
-                        return fileName.matches(".*(?i)(temp|cahce|log|360|tencent|4399|baidu|qq)(s?).*");
+                        return fileName.matches(".*(?i)(temp|cahce|log|360|tencent|baidu|qq)(s?).*");
                     }
                 });
             }
