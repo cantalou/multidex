@@ -462,7 +462,12 @@ public final class MultiDex {
             throws IllegalArgumentException, IllegalAccessException, NoSuchFieldException,
             InvocationTargetException, NoSuchMethodException, IOException {
         if (!files.isEmpty()) {
-            originalDexElements.put(loader.hashCode(), getFieldValue(getFieldValue(loader, FIELD_NAME_PATH_LIST), "dexElements"));
+            int key = loader.hashCode();
+            if (originalDexElements.get(key) != null) {
+                restore(loader);
+            } else {
+                originalDexElements.put(key, getFieldValue(getFieldValue(loader, FIELD_NAME_PATH_LIST), "dexElements"));
+            }
             long start = System.currentTimeMillis();
             if (Build.VERSION.SDK_INT >= 23) {
                 V23.install(loader, files, dexDir);
@@ -756,7 +761,7 @@ public final class MultiDex {
                 }
 
                 suppressedExceptionsField.set(dexPathList, dexElementsSuppressedExceptions);
-                if(exception != null){
+                if (exception != null) {
                     throw exception;
                 }
             }
