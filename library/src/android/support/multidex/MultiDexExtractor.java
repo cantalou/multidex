@@ -137,7 +137,7 @@ public final class MultiDexExtractor {
                     files = loadExistingExtractions(context, sourceApk, dexDir, prefsKeyPrefix);
                 } catch (IOException ioe) {
                     MultiDex.log("Failed to reload existing extracted secondary dex files,"
-                            + " falling back to fresh extraction", ioe);
+                            + " falling back to fresh extraction " + ioe.getMessage());
                     files = performExtractions(sourceApk, dexDir, dexAsyncHandler);
                     putStoredApkInfo(context, prefsKeyPrefix, getTimeStamp(sourceApk), currentCrc,
                             files);
