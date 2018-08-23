@@ -134,6 +134,7 @@ public final class MultiDexExtractor {
                         }
                     }
                 }
+                throw e;
             }
         }
 
