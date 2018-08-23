@@ -119,7 +119,22 @@ public final class MultiDexExtractor {
         FileLock cacheLock = null;
         if (useLock) {
             lockFile = new File(dexDir, LOCK_FILENAME);
-            lockRaf = new RandomAccessFile(lockFile, "rw");
+            try {
+                lockRaf = new RandomAccessFile(lockFile, "rw");
+            } catch (FileNotFoundException e) {
+                if(e.getMessage().contains("No such file or directory")){
+                    if(!dexDir.exists()){
+                        throw new IOException("No space left on device", e);
+                    }else{
+                        File testDir = new File(dexDir, "testSpaceDir");
+                        if(testDir.mkdirs()){
+                            testDir.delete();
+                        }else{
+                            throw new IOException("No space left on device", e);
+                        }
+                    }
+                }
+            }
         }
 
         List<ExtractedDex> files;

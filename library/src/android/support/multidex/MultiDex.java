@@ -638,19 +638,6 @@ public final class MultiDex {
             }
             throw new IOException("Failed to create directory " + dir.getPath());
         }
-
-        //check write permission
-        if (useLock) {
-            File tempFile = new File(dir, "temp");
-            try {
-                FileWriter fw = new FileWriter(tempFile);
-                fw.write("1");
-                fw.close();
-            } finally {
-                tempFile.delete();
-            }
-        }
-
     }
 
 
