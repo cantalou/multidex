@@ -1,10 +1,12 @@
 package android.support.multidex;
 
+import android.text.TextUtils;
+
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.util.ArrayList;
+import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -20,11 +22,11 @@ public class DexUtil {
     /**
      * odex file magic "dey\n036\0"
      */
-    private static final String odexFielMagic = "6465790A30333600";
+    private static final String odexFielMagic = "6465790a30333600";
 
     private static final String CLASSES_DEX = "classes.dex";
 
-    public static boolean verify(ArrayList<? extends File> files, File dexDir, Object[] elements) {
+    public static boolean verify(List<? extends File> files, File dexDir, Object[] elements) {
         boolean result = true;
         ZipFile zp = null;
         try {
@@ -52,13 +54,13 @@ public class DexUtil {
                 }
 
                 String headerContent = headerOfDexFile(odexFile);
-                if (!headerContent.contains(odexFielMagic)) {
+                if (TextUtils.isEmpty(headerContent) || !headerContent.startsWith(odexFielMagic)) {
                     MultiDex.log("odex file header content bad:" + headerContent);
                     closeDexFile(zipFile, elements);
                     MultiDex.log("delete file " + odexFile.delete());
                     result = false;
                 }
-
+                zp.close();
             }
         } catch (IOException e) {
             MultiDex.log("verify error ", e);
@@ -76,6 +78,9 @@ public class DexUtil {
     }
 
     public static void closeDexFile(File zipFile, Object... elements) throws IOException {
+        if (elements == null) {
+            return;
+        }
         for (Object element : elements) {
             Object dexFileValue = null;
             try {

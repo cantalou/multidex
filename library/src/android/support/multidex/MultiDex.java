@@ -376,8 +376,10 @@ public final class MultiDex {
             for (int i = 0; i < MAX_DEX_OPT_RETRY_TIMES; i++) {
                 if (testDexOpt(loader, files, classNames)) {
                     installedApk.add(sourceApk);
-                    break;
+                    return;
                 }
+                log("delete cache dex file");
+                DexUtil.verify(files, dexDir, null);
                 installSecondaryDexes(loader, dexDir, files);
             }
         }
@@ -390,7 +392,7 @@ public final class MultiDex {
                     loader.loadClass(className);
                 }
             } catch (ClassNotFoundException e) {
-                MultiDex.log("test load class from " + loader, e);
+                MultiDex.log("test load class from " + loader + e.getMessage());
                 verifyMode = true;
                 return false;
             }
