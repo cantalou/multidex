@@ -20,11 +20,14 @@
 
 package android.support.multidex;
 
+import android.util.Log;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.util.zip.CRC32;
 import java.util.zip.ZipException;
+import java.util.zip.ZipFile;
 
 /**
  * Tools to build a quick partial crc of zip files.
@@ -122,4 +125,25 @@ final class ZipUtil {
         }
         return crc.getValue();
     }
+
+    /**
+     * Returns whether the file is a valid zip file.
+     */
+    static boolean verifyZipFile(File file) {
+        try {
+            ZipFile zipFile = new ZipFile(file);
+            try {
+                zipFile.close();
+                return true;
+            } catch (IOException e) {
+                Log.w(MultiDex.TAG, "Failed to close zip file: " + file.getAbsolutePath());
+            }
+        } catch (ZipException ex) {
+            Log.w(MultiDex.TAG, "File " + file.getAbsolutePath() + " is not a valid zip file.", ex);
+        } catch (IOException ex) {
+            Log.w(MultiDex.TAG, "Got an IOException trying to open zip file: " + file.getAbsolutePath(), ex);
+        }
+        return false;
+    }
+
 }

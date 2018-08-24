@@ -77,7 +77,7 @@ public final class MultiDexExtractor {
 
     private static final String EXTRACTED_NAME_EXT = ".classes";
     private static final String EXTRACTED_SUFFIX = ".zip";
-    private static final int MAX_EXTRACT_ATTEMPTS = 3;
+    private static final int MAX_EXTRACT_ATTEMPTS = 5;
 
     private static final String PREFS_FILE = "multidex.version";
     private static final String KEY_TIME_STAMP = "timestamp";
@@ -363,6 +363,11 @@ public final class MultiDexExtractor {
                 MultiDex.log("Failed to read crc from " + extractedFile.getAbsolutePath(), e);
             }
 
+            if(isExtractionSuccessful){
+                isExtractionSuccessful = ZipUtil.verifyZipFile(extractedFile);
+                MultiDex.log("verifyZipFile " + isExtractionSuccessful);
+            }
+
             // Log size and crc of the extracted zip file
             MultiDex.log("Extraction " + (isExtractionSuccessful ? "succeeded" : "failed") +
                     " time " + (System.currentTimeMillis() - start) + "ms - length " + extractedFile.getAbsolutePath() + ": " +
@@ -488,6 +493,9 @@ public final class MultiDexExtractor {
                         "\" (tmp of \"" + extractTo.getAbsolutePath() + "\")");
             }
             MultiDex.log("Renaming to " + extractTo.getPath());
+            if(extractTo.exists()){
+                extractTo.delete();
+            }
             if (!tmp.renameTo(extractTo)) {
                 throw new IOException("Failed to rename \"" + tmp.getAbsolutePath() +
                         "\" to \"" + extractTo.getAbsolutePath() + "\"");
