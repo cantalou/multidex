@@ -28,7 +28,6 @@ import android.util.Log;
 import android.util.SparseArray;
 
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
@@ -133,7 +132,11 @@ public final class MultiDex {
 
     private static SparseArray<Object> originalDexElements = new SparseArray<>();
 
+    public static final int MAX_DEX_OPT_RETRY_TIMES = 5;
+
     private static ArrayList<ExceptionHandler> handlers = new ArrayList<>();
+
+    public static boolean verifyMode = false;
 
     static {
         handlers.add(new ReadOnlySystemHandle());
@@ -369,18 +372,32 @@ public final class MultiDex {
                 });
                 installSecondaryDexes(loader, dexDir, files);
             }
-            if (!files.isEmpty() && classNames.length > 0) {
-                try {
-                    for (String className : classNames) {
-                        loader.loadClass(className);
-                    }
-                } catch (ClassNotFoundException e) {
-                    log("Google multi dex installs error . Try inject classLoader ." + Log.getStackTraceString(e));
-                    installSecondaryDexesByInjectClassLoader(loader, dexDir, files);
+
+            for (int i = 0; i < MAX_DEX_OPT_RETRY_TIMES; i++) {
+                if (testDexOpt(loader, files, classNames)) {
+                    installedApk.add(sourceApk);
+                    return;
                 }
+                log("delete cache dex file");
+                DexUtil.verify(files, dexDir, null);
+                installSecondaryDexes(loader, dexDir, files);
             }
-            installedApk.add(sourceApk);
         }
+    }
+
+    private static boolean testDexOpt(ClassLoader loader, List<? extends File> files, String[] classNames) {
+        if (!files.isEmpty() && classNames.length > 0) {
+            try {
+                for (String className : classNames) {
+                    loader.loadClass(className);
+                }
+            } catch (ClassNotFoundException e) {
+                MultiDex.log("test load class from " + loader + e.getMessage());
+                verifyMode = true;
+                return false;
+            }
+        }
+        return true;
     }
 
     private static ApplicationInfo getApplicationInfo(Context context) {
@@ -462,7 +479,12 @@ public final class MultiDex {
             throws IllegalArgumentException, IllegalAccessException, NoSuchFieldException,
             InvocationTargetException, NoSuchMethodException, IOException {
         if (!files.isEmpty()) {
-            originalDexElements.put(loader.hashCode(), getFieldValue(getFieldValue(loader, FIELD_NAME_PATH_LIST), "dexElements"));
+            int key = loader.hashCode();
+            if (originalDexElements.get(key) != null) {
+                restore(loader);
+            } else {
+                originalDexElements.put(key, getFieldValue(getFieldValue(loader, FIELD_NAME_PATH_LIST), "dexElements"));
+            }
             long start = System.currentTimeMillis();
             if (Build.VERSION.SDK_INT >= 23) {
                 V23.install(loader, files, dexDir);
@@ -488,7 +510,7 @@ public final class MultiDex {
      * @return a field object
      * @throws NoSuchFieldException if the field cannot be located
      */
-    private static Field findField(Object instance, String name) throws NoSuchFieldException {
+    static Field findField(Object instance, String name) throws NoSuchFieldException {
         for (Class<?> clazz = instance.getClass(); clazz != null; clazz = clazz.getSuperclass()) {
             try {
                 Field field = clazz.getDeclaredField(name);
@@ -515,7 +537,7 @@ public final class MultiDex {
      * @throws NoSuchFieldException   if the field cannot be located
      * @throws IllegalAccessException if the field cannot be accessed
      */
-    private static Object getFieldValue(Object instance, String name) throws NoSuchFieldException, IllegalAccessException {
+    static Object getFieldValue(Object instance, String name) throws NoSuchFieldException, IllegalAccessException {
         return findField(instance, name).get(instance);
     }
 
@@ -528,7 +550,7 @@ public final class MultiDex {
      * @return a method object
      * @throws NoSuchMethodException if the method cannot be located
      */
-    private static Method findMethod(Object instance, String name, Class<?>... parameterTypes)
+    static Method findMethod(Object instance, String name, Class<?>... parameterTypes)
             throws NoSuchMethodException {
         for (Class<?> clazz = instance.getClass(); clazz != null; clazz = clazz.getSuperclass()) {
             try {
@@ -633,19 +655,6 @@ public final class MultiDex {
             }
             throw new IOException("Failed to create directory " + dir.getPath());
         }
-
-        //check write permission
-        if (useLock) {
-            File tempFile = new File(dir, "temp");
-            try {
-                FileWriter fw = new FileWriter(tempFile);
-                fw.write("1");
-                fw.close();
-            } finally {
-                tempFile.delete();
-            }
-        }
-
     }
 
 
@@ -781,9 +790,19 @@ public final class MultiDex {
                 log("makeDexElements(ArrayList,File,ArrayList) not found in " + dexPathList, e);
                 makeDexElements = findMethod(dexPathList, "makeDexElements", List.class, File.class, List.class);
             }
-
-            return (Object[]) makeDexElements.invoke(dexPathList, files, optimizedDirectory,
-                    suppressedExceptions);
+            Object[] result = null;
+            for (int i = 0; i < MAX_DEX_OPT_RETRY_TIMES; i++) {
+                result = (Object[]) makeDexElements.invoke(dexPathList, files, optimizedDirectory, suppressedExceptions);
+                boolean emptyException = suppressedExceptions.isEmpty();
+                if (!verifyMode && emptyException) {
+                    return result;
+                }
+                verifyMode = true;
+                if (DexUtil.verify(files, optimizedDirectory, result) && emptyException) {
+                    return result;
+                }
+            }
+            return result;
         }
     }
 
