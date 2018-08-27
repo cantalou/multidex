@@ -136,7 +136,9 @@ public final class MultiDex {
 
     private static ArrayList<ExceptionHandler> handlers = new ArrayList<>();
 
-    public static boolean verifyMode = false;
+    static boolean verifyMode = false;
+
+    public static File dexDir;
 
     static {
         handlers.add(new ReadOnlySystemHandle());
@@ -328,7 +330,7 @@ public final class MultiDex {
                         + "continuing without cleaning.", t);
             }
 
-            final File dexDir = getDexDir(mainContext, dataDir, secondaryFolderName);
+            dexDir = getDexDir(mainContext, dataDir, secondaryFolderName);
             if (testMode) {
                 //Delete cached classesN.zip and classesN.dex
                 long start = System.currentTimeMillis();
