@@ -373,31 +373,32 @@ public final class MultiDex {
                 installSecondaryDexes(loader, dexDir, files);
             }
 
-            for (int i = 0; i < MAX_DEX_OPT_RETRY_TIMES; i++) {
-                if (testDexOpt(loader, files, classNames)) {
+            for (int i = 1; i < MAX_DEX_OPT_RETRY_TIMES; i++) {
+                if (testAfterDexOpt(loader, classNames)) {
                     installedApk.add(sourceApk);
                     return;
                 }
-                log("delete cache dex file");
-                DexUtil.verify(files, dexDir, null);
+                log("retry installSecondaryDexes " + i);
                 installSecondaryDexes(loader, dexDir, files);
             }
         }
     }
 
-    private static boolean testDexOpt(ClassLoader loader, List<? extends File> files, String[] classNames) {
-        if (!files.isEmpty() && classNames.length > 0) {
-            try {
-                for (String className : classNames) {
-                    loader.loadClass(className);
-                }
-            } catch (ClassNotFoundException e) {
-                MultiDex.log("test load class from " + loader + e.getMessage());
-                verifyMode = true;
-                return false;
-            }
+    private static boolean testAfterDexOpt(ClassLoader loader, String[] classNames) {
+        if (classNames == null || classNames.length == 0) {
+            return true;
         }
-        return true;
+        try {
+            for (String className : classNames) {
+                loader.loadClass(className);
+            }
+            return true;
+        } catch (ClassNotFoundException e) {
+            MultiDex.log("testDexOpt load class from " + loader);
+            MultiDex.log("", e);
+            verifyMode = true;
+            return false;
+        }
     }
 
     private static ApplicationInfo getApplicationInfo(Context context) {
@@ -736,17 +737,27 @@ public final class MultiDex {
              */
             Field pathListField = findField(loader, FIELD_NAME_PATH_LIST);
             Object dexPathList = pathListField.get(loader);
-            ArrayList<IOException> suppressedExceptions = new ArrayList<IOException>();
+            ArrayList<IOException> suppressedExceptions = new ArrayList<IOException>() {
+                @Override
+                public boolean add(IOException object) {
+                    if (object == null) {
+                        return true;
+                    }
+                    for (int i = 0; i < size(); i++) {
+                        Exception e = get(i);
+                        String sMsg = e.getMessage();
+                        String objMsg = object.getMessage();
+                        if (object.getClass() == e.getClass() && !TextUtils.isEmpty(sMsg) && !TextUtils.isEmpty(objMsg) && objMsg.equals(sMsg)) {
+                            return true;
+                        }
+                    }
+                    return super.add(object);
+                }
+            };
             expandFieldArray(dexPathList, "dexElements", makeDexElements(dexPathList,
                     new ArrayList<File>(additionalClassPathEntries), optimizedDirectory,
                     suppressedExceptions));
             if (suppressedExceptions.size() > 0) {
-                RuntimeException exception = null;
-                for (IOException e : suppressedExceptions) {
-                    log("Exception in makeDexElement \n", e);
-                    //normally only one exception
-                    exception = new RuntimeException("V19.install error", e);
-                }
                 Field suppressedExceptionsField =
                         findField(dexPathList, "dexElementsSuppressedExceptions");
                 IOException[] dexElementsSuppressedExceptions =
@@ -767,9 +778,6 @@ public final class MultiDex {
                 }
 
                 suppressedExceptionsField.set(dexPathList, dexElementsSuppressedExceptions);
-                if (exception != null) {
-                    throw exception;
-                }
             }
         }
 
@@ -782,7 +790,7 @@ public final class MultiDex {
                 ArrayList<IOException> suppressedExceptions)
                 throws IllegalAccessException, InvocationTargetException,
                 NoSuchMethodException {
-            Method makeDexElements = null;
+            Method makeDexElements;
             try {
                 makeDexElements = findMethod(dexPathList, "makeDexElements", ArrayList.class, File.class,
                         ArrayList.class);
@@ -791,15 +799,39 @@ public final class MultiDex {
                 makeDexElements = findMethod(dexPathList, "makeDexElements", List.class, File.class, List.class);
             }
             Object[] result = null;
-            for (int i = 0; i < MAX_DEX_OPT_RETRY_TIMES; i++) {
-                result = (Object[]) makeDexElements.invoke(dexPathList, files, optimizedDirectory, suppressedExceptions);
-                boolean emptyException = suppressedExceptions.isEmpty();
-                if (!verifyMode && emptyException) {
-                    return result;
-                }
-                verifyMode = true;
-                if (DexUtil.verify(files, optimizedDirectory, result) && emptyException) {
-                    return result;
+            for (int i = 0, len = files.size(); i < len; i++) {
+                File zipFile = files.get(i);
+                for (int j = 0; j < MAX_DEX_OPT_RETRY_TIMES; j++) {
+                    ArrayList<File> zipFiles = new ArrayList();
+                    zipFiles.add(zipFile);
+
+                    if (verifyMode) {
+                        log("in verifyMode , we want to verify the old odex file before invoke makeDexElements");
+                        DexUtil.verify(zipFile, optimizedDirectory, null);
+                    }
+
+                    ArrayList<IOException> suppressedExceptions_ = new ArrayList<>();
+                    Object[] dexElements = (Object[]) makeDexElements.invoke(dexPathList, zipFiles, optimizedDirectory, suppressedExceptions_);
+                    if (!verifyMode) {
+                        verifyMode = !suppressedExceptions_.isEmpty();
+                    }
+
+                    suppressedExceptions.addAll(suppressedExceptions_);
+
+                    if (dexElements != null && dexElements.length > 0) {
+                        if (result == null) {
+                            result = (Object[]) Array.newInstance(dexElements[0].getClass(), files.size());
+                        }
+                        result[i] = dexElements[0];
+                    }
+
+                    if (!verifyMode) {
+                        break;
+                    }
+
+                    if (DexUtil.verify(zipFile, optimizedDirectory, result != null && result.length > i ? result[i] : null)) {
+                        break;
+                    }
                 }
             }
             return result;

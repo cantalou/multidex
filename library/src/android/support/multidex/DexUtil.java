@@ -6,14 +6,11 @@ import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.util.List;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
 
 import dalvik.system.DexFile;
 
 /**
- * Tools to check odex file, remove the bad file
+ * Tools to check odex file and remove if it was bad
  */
 public class DexUtil {
 
@@ -24,77 +21,49 @@ public class DexUtil {
      */
     private static final String odexFielMagic = "6465790a30333600";
 
-    private static final String CLASSES_DEX = "classes.dex";
-
-    public static boolean verify(List<? extends File> files, File dexDir, Object[] elements) {
-        boolean result = true;
-        ZipFile zp = null;
+    /**
+     * Verify optimized dex file header content
+     *
+     * @param dexZipFile
+     * @param dexDir
+     * @param element
+     * @return
+     */
+    public static boolean verify(File dexZipFile, File dexDir, Object element) {
         try {
-            for (File zipFile : files) {
-                zp = new ZipFile(zipFile);
-                File odexFile = new File(optimizedPathFor(zipFile, dexDir));
-                if (!odexFile.exists()) {
-                    continue;
-                }
-                long length = odexFile.length();
-                if (length == 0) {
-                    odexFile.delete();
-                    continue;
-                }
-
-                MultiDex.log("verify odex file " + odexFile);
-
-                ZipEntry entry = zp.getEntry(CLASSES_DEX);
-                long minLen = entry.getSize() + 40;
-                if (length <= minLen) {
-                    MultiDex.log("odex  " + length + " less than " + minLen + " (uncompress size " + entry.getSize() + " plus header 40 byte)");
-                    closeDexFile(zipFile, elements);
-                    MultiDex.log("delete file " + odexFile.delete());
-                    result = false;
-                }
-
-                String headerContent = headerOfDexFile(odexFile);
-                if (TextUtils.isEmpty(headerContent) || !headerContent.startsWith(odexFielMagic)) {
-                    MultiDex.log("odex file header content bad:" + headerContent);
-                    closeDexFile(zipFile, elements);
-                    MultiDex.log("delete file " + odexFile.delete());
-                    result = false;
-                }
-                zp.close();
+            File optDexFile = new File(optimizedPathFor(dexZipFile, dexDir));
+            if (!optDexFile.exists()) {
+                return false;
             }
+            MultiDex.log("verify opt dex file " + optDexFile);
+            String headerContent = headerOfDexFile(optDexFile);
+            if (!TextUtils.isEmpty(headerContent) && headerContent.startsWith(odexFielMagic)) {
+                return true;
+            }
+            MultiDex.log("odex file header content was bad:" + headerContent);
+            closeDexFile(dexZipFile, element);
+            MultiDex.log("delete file " + optDexFile.delete());
         } catch (IOException e) {
             MultiDex.log("verify error ", e);
-            result = false;
-        } finally {
-            if (zp != null) {
-                try {
-                    zp.close();
-                } catch (IOException e) {
-                    MultiDex.log("DexUtil.verify error", e);
-                }
-            }
         }
-        return result;
+        return false;
     }
 
-    public static void closeDexFile(File zipFile, Object... elements) throws IOException {
-        if (elements == null) {
+    public static void closeDexFile(File zipFile, Object element) {
+        if (element == null) {
             return;
         }
-        for (Object element : elements) {
-            Object dexFileValue = null;
-            try {
-                dexFileValue = MultiDex.getFieldValue(element, "dexFile");
-            } catch (Exception e) {
-                MultiDex.log("can not get file dexFile from element ", e);
-            }
-            if (dexFileValue != null && dexFileValue instanceof DexFile) {
+        try {
+            Object dexFileValue = MultiDex.getFieldValue(element, "dexFile");
+            if (dexFileValue instanceof DexFile) {
                 DexFile dexFile = (DexFile) dexFileValue;
                 String dexFileName = dexFile.getName();
                 if (dexFileName.equals(zipFile.getAbsolutePath())) {
                     dexFile.close();
                 }
             }
+        } catch (Exception e) {
+            MultiDex.log("can not get file dexFile from element ", e);
         }
     }
 
@@ -127,11 +96,16 @@ public class DexUtil {
                 fileName = sb.toString();
             }
         }
-
         File result = new File(optimizedDirectory, fileName);
         return result.getPath();
     }
 
+    /**
+     * magic(8), dexOffset(4), dexLength(4), depsOffset(4), depsLength(4), optOffset(4), optLength(4), flags(4), checksum(4)
+     *
+     * @param dexFile
+     * @return header content of opt dex file in hex format
+     */
     public static String headerOfDexFile(File dexFile) throws IOException {
         DataInputStream dis = null;
         try {
