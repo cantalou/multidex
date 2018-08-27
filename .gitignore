@@ -8,3 +8,4 @@ captures
 outputs
 *.apk
 /repo
+/app/libs/*.jar
