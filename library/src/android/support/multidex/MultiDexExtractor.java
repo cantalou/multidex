@@ -66,8 +66,6 @@ public final class MultiDexExtractor {
         }
     }
 
-    private static final String TAG = MultiDex.TAG;
-
     /**
      * We look for additional dex files named {@code classes2.dex},
      * {@code classes3.dex}, etc.
@@ -97,6 +95,11 @@ public final class MultiDexExtractor {
     private static final String LOCK_FILENAME = "MultiDex.lock";
 
     /**
+     * file rename may fail in some device, we will extract classes.dex to specify name if it occurs
+     */
+    private static boolean renameFail = false;
+
+    /**
      * Extracts application secondary dexes into files in the application data
      * directory.
      *
@@ -122,14 +125,16 @@ public final class MultiDexExtractor {
             try {
                 lockRaf = new RandomAccessFile(lockFile, "rw");
             } catch (FileNotFoundException e) {
-                if(e.getMessage().contains("No such file or directory")){
-                    if(!dexDir.exists()){
+                String message = e.getMessage();
+                if (message.contains("No such file or directory")) {
+                    if (!dexDir.exists()) {
                         throw new IOException("No space left on device", e);
-                    }else{
+                    } else {
                         File testDir = new File(dexDir, "testSpaceDir");
-                        if(testDir.mkdirs()){
+                        testDir.mkdirs();
+                        if (testDir.exists()) {
                             testDir.delete();
-                        }else{
+                        } else {
                             throw new IOException("No space left on device", e);
                         }
                     }
@@ -217,7 +222,7 @@ public final class MultiDexExtractor {
                         prefsKeyPrefix + KEY_DEX_TIME + secondaryNumber, NO_VALUE);
                 long lastModified = extractedFile.lastModified();
                 if ((expectedModTime != lastModified)
-                        || (expectedCrc != extractedFile.crc)) {
+                        || (expectedCrc != extractedFile.crc) || !ZipUtil.verifyZipFile(extractedFile)) {
                     throw new IOException("Invalid extracted dex: " + extractedFile +
                             " (key \"" + prefsKeyPrefix + "\"), expected modification time: "
                             + expectedModTime + ", modification time: "
@@ -363,9 +368,23 @@ public final class MultiDexExtractor {
                 MultiDex.log("Failed to read crc from " + extractedFile.getAbsolutePath(), e);
             }
 
-            if(isExtractionSuccessful){
+            if (isExtractionSuccessful) {
                 isExtractionSuccessful = ZipUtil.verifyZipFile(extractedFile);
                 MultiDex.log("verifyZipFile " + isExtractionSuccessful);
+            }
+
+            if (isExtractionSuccessful) {
+                long sizeInApk = dexFile.getSize();
+                long crcInApk = dexFile.getCrc();
+                MultiDex.log("classes.dex : sizeInApk:" + sizeInApk + ", crcInApk " + crcInApk);
+
+                ZipFile classZip = new ZipFile(extractedFile);
+                ZipEntry classesEntry = classZip.getEntry("classes.dex");
+                long sizeInZip = classesEntry.getSize();
+                long crcInZip = classesEntry.getCrc();
+                MultiDex.log("classes.dex : sizeInZip:" + sizeInZip + ", crcInZip " + crcInZip);
+
+                isExtractionSuccessful = sizeInApk == sizeInZip && crcInApk == crcInZip;
             }
 
             // Log size and crc of the extracted zip file
@@ -386,15 +405,6 @@ public final class MultiDexExtractor {
                     extractedFile.getAbsolutePath() + " for secondary dex (" +
                     secondaryNumber + ")");
         }
-    }
-
-
-    public static void clearStoredApkInfo(Context context, String keyPrefix) {
-        SharedPreferences prefs = getMultiDexPreferences(context);
-        SharedPreferences.Editor edit = prefs.edit();
-        edit.putLong(keyPrefix + KEY_TIME_STAMP, NO_VALUE);
-        edit.putLong(keyPrefix + KEY_CRC, NO_VALUE);
-        edit.commit();
     }
 
     /**
@@ -465,11 +475,18 @@ public final class MultiDexExtractor {
                                 String extractedFilePrefix) throws IOException, FileNotFoundException {
 
         InputStream in = apk.getInputStream(dexFile);
-        ZipOutputStream out = null;
+        ZipOutputStream out;
+        File tmp;
         // Temp files must not start with extractedFilePrefix to get cleaned up in prepareDexDir()
-        File tmp = File.createTempFile("tmp-" + extractedFilePrefix, EXTRACTED_SUFFIX,
-                extractTo.getParentFile());
+        if (renameFail) {
+            tmp = extractTo;
+        } else {
+            tmp = File.createTempFile("tmp-" + extractedFilePrefix, EXTRACTED_SUFFIX,
+                    extractTo.getParentFile());
+        }
+
         MultiDex.log("Extracting " + tmp.getPath());
+
         try {
             out = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(tmp)));
             try {
@@ -488,21 +505,27 @@ public final class MultiDexExtractor {
             } finally {
                 out.close();
             }
-            if (!tmp.setReadOnly()) {
-                MultiDex.log("Failed to mark readonly \"" + tmp.getAbsolutePath() +
-                        "\" (tmp of \"" + extractTo.getAbsolutePath() + "\")");
-            }
-            MultiDex.log("Renaming to " + extractTo.getPath());
-            if(extractTo.exists()){
-                extractTo.delete();
-            }
-            if (!tmp.renameTo(extractTo)) {
-                throw new IOException("Failed to rename \"" + tmp.getAbsolutePath() +
-                        "\" to \"" + extractTo.getAbsolutePath() + "\"");
+
+            if (!renameFail) {
+                if (!tmp.setReadOnly()) {
+                    MultiDex.log("Failed to mark readonly \"" + tmp.getAbsolutePath() +
+                            "\" (tmp of \"" + extractTo.getAbsolutePath() + "\")");
+                }
+                MultiDex.log("Renaming to " + extractTo.getPath());
+                if (extractTo.exists()) {
+                    extractTo.delete();
+                }
+                if (!tmp.renameTo(extractTo)) {
+                    renameFail = true;
+                    MultiDex.log("Failed to rename \"" + tmp.getAbsolutePath() +
+                            "\" to \"" + extractTo.getAbsolutePath() + "\"");
+                }
             }
         } finally {
             closeQuietly(in);
-            tmp.delete(); // return status ignored
+            if (!renameFail) {
+                tmp.delete(); // return status ignored
+            }
         }
     }
 

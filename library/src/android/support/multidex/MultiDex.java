@@ -193,12 +193,17 @@ public final class MultiDex {
         }
 
         try {
-            doInstallation(context,
-                    new File(applicationInfo.sourceDir),
-                    new File(applicationInfo.dataDir),
-                    CODE_CACHE_SECONDARY_FOLDER_NAME,
-                    NO_KEY_PREFIX, mode, classNames);
-
+            for (int i = 0; i < MAX_DEX_OPT_RETRY_TIMES; i++) {
+                boolean optResult = doInstallation(context,
+                        new File(applicationInfo.sourceDir),
+                        new File(applicationInfo.dataDir),
+                        CODE_CACHE_SECONDARY_FOLDER_NAME,
+                        NO_KEY_PREFIX, mode, classNames);
+                log("MultiDex.doInstallation times " + i + ", result " + optResult);
+                if(optResult){
+                    break;
+                }
+            }
         } catch (Exception e) {
             String msg = Log.getStackTraceString(e);
             log("MultiDex installation failure, " + msg);
@@ -210,7 +215,6 @@ public final class MultiDex {
             }
             if (handled) {
                 try {
-                    restore(context.getClassLoader());
                     doInstallation(context,
                             new File(applicationInfo.sourceDir),
                             new File(applicationInfo.dataDir),
@@ -277,26 +281,11 @@ public final class MultiDex {
      * @param prefsKeyPrefix      prefix of all stored preference keys.
      * @param mode
      */
-    private static void doInstallation(Context mainContext, File sourceApk, File dataDir, String secondaryFolderName,
+    private static boolean doInstallation(Context mainContext, File sourceApk, File dataDir, String secondaryFolderName,
                                        String prefsKeyPrefix, int mode, final String... classNames) throws IOException,
             IllegalArgumentException, IllegalAccessException, NoSuchFieldException,
             InvocationTargetException, NoSuchMethodException {
         synchronized (installedApk) {
-
-            if (!testMode) {
-                if (installedApk.contains(sourceApk)) {
-                    return;
-                }
-            }
-
-            if (Build.VERSION.SDK_INT > MAX_SUPPORTED_SDK_VERSION) {
-                log("MultiDex is not guaranteed to work in SDK version "
-                        + Build.VERSION.SDK_INT + ": SDK version higher than "
-                        + MAX_SUPPORTED_SDK_VERSION + " should be backed by "
-                        + "runtime with built-in multidex capabilty but it's not the "
-                        + "case here: java.vm.version=\""
-                        + System.getProperty("java.vm.version") + "\"");
-            }
 
             /* The patched class loader is expected to be a descendant of
              * dalvik.system.BaseDexClassLoader. We modify its
@@ -312,15 +301,32 @@ public final class MultiDex {
                  * null base Context.
                  */
                 log("Failure while trying to obtain Context class loader. " +
-                        "Must be running in test mode. Skip patching.", e);
-                return;
+                            "Must be running in test mode. Skip patching.", e);
+                return false;
             }
+
+            if (!testMode) {
+                if (installedApk.contains(sourceApk) && testAfterDexOpt(loader, classNames)) {
+                    return true;
+                }
+            }
+
+            if (Build.VERSION.SDK_INT > MAX_SUPPORTED_SDK_VERSION) {
+                log("MultiDex is not guaranteed to work in SDK version "
+                        + Build.VERSION.SDK_INT + ": SDK version higher than "
+                        + MAX_SUPPORTED_SDK_VERSION + " should be backed by "
+                        + "runtime with built-in multidex capabilty but it's not the "
+                        + "case here: java.vm.version=\""
+                        + System.getProperty("java.vm.version") + "\"");
+            }
+
+
             if (loader == null) {
                 // Note, the context class loader is null when running Robolectric tests.
                 log(
                         "Context class loader is null. Must be running in test mode. "
                                 + "Skip patching.");
-                return;
+                return false;
             }
 
             try {
@@ -375,14 +381,11 @@ public final class MultiDex {
                 installSecondaryDexes(loader, dexDir, files);
             }
 
-            for (int i = 1; i < MAX_DEX_OPT_RETRY_TIMES; i++) {
-                if (testAfterDexOpt(loader, classNames)) {
-                    installedApk.add(sourceApk);
-                    return;
-                }
-                log("retry installSecondaryDexes " + i);
-                installSecondaryDexes(loader, dexDir, files);
+            if (testAfterDexOpt(loader, classNames)) {
+                installedApk.add(sourceApk);
+                return true;
             }
+            return false;
         }
     }
 
@@ -816,6 +819,11 @@ public final class MultiDex {
                     Object[] dexElements = (Object[]) makeDexElements.invoke(dexPathList, zipFiles, optimizedDirectory, suppressedExceptions_);
                     if (!verifyMode) {
                         verifyMode = !suppressedExceptions_.isEmpty();
+                    }
+
+                    if (!suppressedExceptions_.isEmpty()) {
+                        log(suppressedExceptions_.get(0)
+                                                 .getMessage());
                     }
 
                     suppressedExceptions.addAll(suppressedExceptions_);

@@ -19,10 +19,14 @@ public class DexUtil {
     /**
      * odex file magic "dey\n036\0"
      */
-    private static final String odexFielMagic = "6465790a30333600";
+    private static final String odexFileMagic = "6465790a30333600";
 
     /**
-     * Verify optimized dex file header content
+     * verify the header content of optimized dex file.<br/>
+     * /system/bin/dexopt rewrite header value ffffffffffffffff -> 6465790a30333600 at last phase, so just check file magic value.
+     * In some 4.x device, we found that generated bad odex occasionally which only contains header(40 bytes) and dex file content. Dalvikvm log
+     * message like :Unable to extract+optimize DEX from '/data/data/[package]/code_cache/secondary-dexes/[package].apk.classes2.zip', nothing useful message
+     * for resolve the issue. So this method verify and delete the cached odex file if was bad for generating new odex file in next time call makeDexElements.
      *
      * @param dexZipFile
      * @param dexDir
@@ -37,7 +41,7 @@ public class DexUtil {
             }
             MultiDex.log("verify opt dex file " + optDexFile);
             String headerContent = headerOfDexFile(optDexFile);
-            if (!TextUtils.isEmpty(headerContent) && headerContent.startsWith(odexFielMagic)) {
+            if (!TextUtils.isEmpty(headerContent) && headerContent.startsWith(odexFileMagic)) {
                 return true;
             }
             MultiDex.log("odex file header content was bad:" + headerContent);
