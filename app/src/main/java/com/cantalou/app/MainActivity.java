@@ -12,7 +12,6 @@ import android.widget.TextView;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
-import java.security.PrivateKey;
 import java.util.List;
 
 import dalvik.system.DexClassLoader;
@@ -28,16 +27,10 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.load).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                String apkFile = "/data/data/com.cantalou.divider.app/files/4399GameCenter.294.jar";
-                String apkOptFile = "/data/data/com.cantalou.divider.app/files/dexOpt";
+                String apkFile = "/mnt/sdcard/Download/com.m4399.gamecenter.plugin.main.4.2.0.45.295.apk";
+                String apkOptFile = "/mnt/sdcard/Download";
                 File dexDir = new File(apkOptFile);
                 dexDir.mkdirs();
-                try {
-
-                    loadApplication(getBaseContext(), apkFile, apkOptFile);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
             }
         });
     }

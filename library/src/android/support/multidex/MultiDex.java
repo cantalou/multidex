@@ -138,7 +138,7 @@ public final class MultiDex {
 
     static boolean verifyMode = false;
 
-    public static File dexDir;
+    public static File mainDexDir;
 
     static {
         handlers.add(new ReadOnlySystemHandle());
@@ -173,7 +173,7 @@ public final class MultiDex {
      * @throws RuntimeException if an error occurred preventing the classloader
      *                          extension.
      */
-    public static void install(Context context, int mode, String... classNames) {
+    public synchronized static void install(Context context, int mode, String... classNames) {
         log("Installing application");
         if (IS_VM_MULTIDEX_CAPABLE) {
             log("VM has multidex support, MultiDex support library is disabled.");
@@ -193,15 +193,45 @@ public final class MultiDex {
         }
 
         try {
-            for (int i = 0; i < MAX_DEX_OPT_RETRY_TIMES; i++) {
-                boolean optResult = doInstallation(context,
-                        new File(applicationInfo.sourceDir),
-                        new File(applicationInfo.dataDir),
-                        CODE_CACHE_SECONDARY_FOLDER_NAME,
-                        NO_KEY_PREFIX, mode, classNames);
-                log("MultiDex.doInstallation times " + i + ", result " + optResult);
-                if(optResult){
-                    break;
+            boolean optResult = doInstallation(context,
+                    new File(applicationInfo.sourceDir),
+                    new File(applicationInfo.dataDir),
+                    CODE_CACHE_SECONDARY_FOLDER_NAME,
+                    NO_KEY_PREFIX, mode, classNames);
+
+            log("MultiDex.doInstallation normal result " + optResult);
+
+            for (int i = 1; i < MAX_DEX_OPT_RETRY_TIMES && !optResult; i++) {
+                String secondaryDir = CODE_CACHE_SECONDARY_FOLDER_NAME + i;
+                File dexDir = new File(mainDexDir.getParent(), secondaryDir);
+                try {
+                    optResult = doInstallation(context,
+                            new File(applicationInfo.sourceDir),
+                            new File(applicationInfo.dataDir),
+                            secondaryDir,
+                            NO_KEY_PREFIX, mode, classNames);
+                    log("MultiDex.doInstallation times " + i + " secondaryDir " + secondaryDir + ", result " + optResult);
+                    if (optResult) {
+                        File[] dexFiles = dexDir.listFiles();
+                        if (dexFiles != null) {
+                            for (File dexFile : dexFiles) {
+                                log("MultiDex.doInstallation copy file " + dexFile + " to " + mainDexDir + " " + FileUtil.copy(dexFile, mainDexDir));
+                            }
+                        }
+                        doInstallation(context,
+                                new File(applicationInfo.sourceDir),
+                                new File(applicationInfo.dataDir),
+                                CODE_CACHE_SECONDARY_FOLDER_NAME,
+                                NO_KEY_PREFIX, mode, classNames);
+                    }
+                } finally {
+                    File[] dexFiles = dexDir.listFiles();
+                    if (dexFiles != null) {
+                        for (File dexFile : dexFiles) {
+                            dexFile.delete();
+                        }
+                    }
+                    dexDir.delete();
                 }
             }
         } catch (Exception e) {
@@ -282,7 +312,7 @@ public final class MultiDex {
      * @param mode
      */
     private static boolean doInstallation(Context mainContext, File sourceApk, File dataDir, String secondaryFolderName,
-                                       String prefsKeyPrefix, int mode, final String... classNames) throws IOException,
+                                          String prefsKeyPrefix, int mode, final String... classNames) throws IOException,
             IllegalArgumentException, IllegalAccessException, NoSuchFieldException,
             InvocationTargetException, NoSuchMethodException {
         synchronized (installedApk) {
@@ -301,7 +331,7 @@ public final class MultiDex {
                  * null base Context.
                  */
                 log("Failure while trying to obtain Context class loader. " +
-                            "Must be running in test mode. Skip patching.", e);
+                        "Must be running in test mode. Skip patching.", e);
                 return false;
             }
 
@@ -336,7 +366,15 @@ public final class MultiDex {
                         + "continuing without cleaning.", t);
             }
 
-            dexDir = getDexDir(mainContext, dataDir, secondaryFolderName);
+            final File dexDir = getDexDir(mainContext, dataDir, secondaryFolderName);
+            if (mainDexDir == null) {
+                mainDexDir = dexDir;
+            }
+
+            if (testMode && secondaryFolderName == CODE_CACHE_SECONDARY_FOLDER_NAME) {
+                return false;
+            }
+
             if (testMode) {
                 //Delete cached classesN.zip and classesN.dex
                 long start = System.currentTimeMillis();
@@ -382,7 +420,9 @@ public final class MultiDex {
             }
 
             if (testAfterDexOpt(loader, classNames)) {
-                installedApk.add(sourceApk);
+                if (secondaryFolderName.equals(CODE_CACHE_SECONDARY_FOLDER_NAME)) {
+                    installedApk.add(sourceApk);
+                }
                 return true;
             }
             return false;
@@ -811,6 +851,19 @@ public final class MultiDex {
                     zipFiles.add(zipFile);
 
                     if (verifyMode) {
+                        log("in verifyMode , we want to verify the old odex file before invoke DexFile.loadDex");
+                        DexUtil.verify(zipFile, optimizedDirectory, null);
+                    }
+
+                    try {
+                        DexFile.loadDex(zipFile.getAbsolutePath(), DexUtil.optimizedPathFor(zipFile, optimizedDirectory), 0);
+                    } catch (IOException e) {
+                        log("DexFile.loadDex " + e.getMessage());
+                        suppressedExceptions.add(e);
+                        verifyMode = true;
+                    }
+
+                    if (verifyMode) {
                         log("in verifyMode , we want to verify the old odex file before invoke makeDexElements");
                         DexUtil.verify(zipFile, optimizedDirectory, null);
                     }
@@ -822,8 +875,8 @@ public final class MultiDex {
                     }
 
                     if (!suppressedExceptions_.isEmpty()) {
-                        log(suppressedExceptions_.get(0)
-                                                 .getMessage());
+                        log("makeDexElements " + suppressedExceptions_.get(0)
+                                                                      .getMessage());
                     }
 
                     suppressedExceptions.addAll(suppressedExceptions_);

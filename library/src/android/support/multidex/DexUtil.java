@@ -75,7 +75,7 @@ public class DexUtil {
      * Converts a dex/jar file path and an output directory to an
      * output file path for an associated optimized dex file.
      */
-    private static String optimizedPathFor(File path, File optimizedDirectory) {
+    public static String optimizedPathFor(File path, File optimizedDirectory) {
         /*
          * Get the filename component of the path, and replace the
          * suffix with ".dex" if that's not already the suffix.
@@ -116,7 +116,11 @@ public class DexUtil {
             StringBuilder msg = new StringBuilder(40 * 2);
             dis = new DataInputStream(new FileInputStream(dexFile));
             for (int i = 0; i < 40; i++) {
-                String value = Integer.toHexString(dis.read());
+                int data = dis.read();
+                if (data == -1) {
+                    break;
+                }
+                String value = Integer.toHexString(data);
                 if (value.length() == 2) {
                     msg.append(value);
                 } else {

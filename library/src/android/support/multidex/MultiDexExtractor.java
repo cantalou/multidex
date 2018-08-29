@@ -97,7 +97,7 @@ public final class MultiDexExtractor {
     /**
      * file rename may fail in some device, we will extract classes.dex to specify name if it occurs
      */
-    private static boolean renameFail = false;
+    public static boolean renameFail = false;
 
     /**
      * Extracts application secondary dexes into files in the application data
@@ -148,9 +148,9 @@ public final class MultiDexExtractor {
         try {
             if (useLock) {
                 lockChannel = lockRaf.getChannel();
-                MultiDex.log("Blocking on lock " + lockFile.getPath());
+                MultiDex.log("Try to block on lock " + lockFile.getPath());
                 cacheLock = lockChannel.lock();
-                MultiDex.log(lockFile.getPath() + " locked");
+                MultiDex.log("Lock success");
             }
 
             if (!forceReload && !isModified(context, sourceApk, currentCrc, prefsKeyPrefix)) {
@@ -376,13 +376,13 @@ public final class MultiDexExtractor {
             if (isExtractionSuccessful) {
                 long sizeInApk = dexFile.getSize();
                 long crcInApk = dexFile.getCrc();
-                MultiDex.log("classes.dex : sizeInApk:" + sizeInApk + ", crcInApk " + crcInApk);
+                MultiDex.log(dexFile.getName() + " sizeInApk:" + Long.toHexString(sizeInApk) + ", crcInApk " + Long.toHexString(crcInApk));
 
                 ZipFile classZip = new ZipFile(extractedFile);
                 ZipEntry classesEntry = classZip.getEntry("classes.dex");
                 long sizeInZip = classesEntry.getSize();
                 long crcInZip = classesEntry.getCrc();
-                MultiDex.log("classes.dex : sizeInZip:" + sizeInZip + ", crcInZip " + crcInZip);
+                MultiDex.log("classes.dex  sizeInZip:" + Long.toHexString(sizeInZip) + ", crcInZip " + Long.toHexString(crcInZip));
 
                 isExtractionSuccessful = sizeInApk == sizeInZip && crcInApk == crcInZip;
             }
