@@ -20,7 +20,7 @@ android {
     dexOptions {
         jumboMode = true
         preDexLibraries = false
-        additionalParameters("--set-max-idx-number=52000","--minimal-main-dex")
+        additionalParameters("--set-max-idx-number=52000", "--minimal-main-dex")
     }
 
     buildTypes {
@@ -62,4 +62,3 @@ dependencies {
 configurations.all {
     exclude group: 'com.android.support', module: 'multidex'
 }
-

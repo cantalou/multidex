@@ -12,7 +12,6 @@ import android.widget.TextView;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
-import java.security.PrivateKey;
 import java.util.List;
 
 import dalvik.system.DexClassLoader;
@@ -28,18 +27,21 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.load).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                String apkFile = "/data/data/com.cantalou.divider.app/files/4399GameCenter.294.jar";
-                String apkOptFile = "/data/data/com.cantalou.divider.app/files/dexOpt";
-                File dexDir = new File(apkOptFile);
-                dexDir.mkdirs();
-                try {
-
-                    loadApplication(getBaseContext(), apkFile, apkOptFile);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
+//                String apkFile = "/data/data/com.cantalou.divider.app/files/4399GameCenter.294.jar";
+//                String apkOptFile = "/data/data/com.cantalou.divider.app/files/dexOpt";
+//                File dexDir = new File(apkOptFile);
+//                dexDir.mkdirs();
+//                try {
+//
+//                    loadApplication(getBaseContext(), apkFile, apkOptFile);
+//                } catch (Exception e) {
+//                    e.printStackTrace();
+//                }
             }
         });
+
+        ((TextView)findViewById(R.id.appClassLoader)).setText(MainActivity.class.getClassLoader().toString());
+        ((TextView)findViewById(R.id.bundleClassLoader)).setText(new Bundle().getClassLoader().toString());
     }
 
     private void loadApplication(Context context, String apkFile, String apkOptFile) throws ClassNotFoundException, InvocationTargetException, NoSuchMethodException, NoSuchFieldException, IOException, IllegalAccessException {
