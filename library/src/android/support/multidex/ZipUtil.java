@@ -22,9 +22,11 @@ package android.support.multidex;
 
 import android.util.Log;
 
+import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.util.Arrays;
 import java.util.zip.CRC32;
 import java.util.zip.ZipException;
 import java.util.zip.ZipFile;
@@ -145,5 +147,31 @@ final class ZipUtil {
         }
         return false;
     }
+
+    static boolean zipEntryEquals(ZipFile src, String srcName, ZipFile dest, String destName) {
+        BufferedInputStream srcIn = null;
+        BufferedInputStream destIn = null;
+        byte[] srcBuf = new byte[8 * 1024];
+        byte[] destBuf = new byte[8 * 1024];
+        try {
+            srcIn = new BufferedInputStream(src.getInputStream(src.getEntry(srcName)));
+            destIn = new BufferedInputStream(dest.getInputStream(dest.getEntry(destName)));
+            while (true) {
+                int srcValue = srcIn.read(srcBuf);
+                int destValue = destIn.read(destBuf);
+                if (srcValue != destValue || !Arrays.equals(srcBuf, destBuf)) {
+                    return false;
+                }
+                if (srcValue == -1) {
+                    return true;
+                }
+            }
+        } catch (IOException e) {
+            return false;
+        } finally {
+            FileUtil.close(srcIn, destIn);
+        }
+    }
+
 
 }

@@ -1,13 +1,14 @@
 package android.support.multidex;
 
-import android.text.TextUtils;
-
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FilenameFilter;
 import java.io.IOException;
 
 import dalvik.system.DexFile;
+
+import static android.support.multidex.MultiDex.log;
 
 /**
  * Tools to check odex file and remove if it was bad
@@ -34,22 +35,10 @@ public class DexUtil {
      * @return
      */
     public static boolean verify(File dexZipFile, File dexDir, Object element) {
-        try {
-            File optDexFile = new File(optimizedPathFor(dexZipFile, dexDir));
-            if (!optDexFile.exists()) {
-                return false;
-            }
-            MultiDex.log("verify opt dex file " + optDexFile);
-            String headerContent = headerOfDexFile(optDexFile);
-            if (!TextUtils.isEmpty(headerContent) && headerContent.startsWith(odexFileMagic)) {
-                return true;
-            }
-            MultiDex.log("odex file header content was bad:" + headerContent);
-            closeDexFile(dexZipFile, element);
-            MultiDex.log("delete file " + optDexFile.delete());
-        } catch (IOException e) {
-            MultiDex.log("verify error ", e);
+        if (testDex(dexZipFile, dexDir)) {
+            return true;
         }
+        closeDexFile(dexZipFile, element);
         return false;
     }
 
@@ -67,7 +56,7 @@ public class DexUtil {
                 }
             }
         } catch (Exception e) {
-            MultiDex.log("can not get file dexFile from element ", e);
+            log("can not get file dexFile from element ", e);
         }
     }
 
@@ -110,7 +99,7 @@ public class DexUtil {
      * @param dexFile
      * @return header content of opt dex file in hex format
      */
-    public static String headerOfDexFile(File dexFile) throws IOException {
+    public static String headerOfDexFile(File dexFile) {
         DataInputStream dis = null;
         try {
             StringBuilder msg = new StringBuilder(40 * 2);
@@ -129,6 +118,8 @@ public class DexUtil {
                 }
             }
             return msg.toString();
+        } catch (IOException e) {
+            return "read error " + e;
         } finally {
             if (dis != null) {
                 try {
@@ -136,6 +127,49 @@ public class DexUtil {
                 } catch (IOException e) {
                     //ignore
                 }
+            }
+        }
+
+    }
+
+    public static boolean testDex(File zip, File dexDir) {
+        String optimizedPath = optimizedPathFor(zip, dexDir);
+        File optDexFile = new File(optimizedPath);
+        if (!optDexFile.exists()) {
+            return false;
+        }
+        try {
+            DexFile.loadDex(zip.getCanonicalPath(), optimizedPath, 0);
+            log("test load odex file " + optimizedPath + " success");
+            return true;
+        } catch (Exception e) {
+            log("test load odex file " + optimizedPath + " failed, header content:" + headerOfDexFile(optDexFile) + ", delete file  " + new File(optimizedPath).delete());
+            return false;
+        }
+    }
+
+    public static boolean testDex(String zip, File dexDir) {
+        return testDex(new File(zip), dexDir);
+    }
+
+    public static void deleteInvalid(File dexDir) {
+        if (dexDir == null || !dexDir.exists()) {
+            return;
+        }
+
+        File[] zips = dexDir.listFiles(new FilenameFilter() {
+            @Override
+            public boolean accept(File dir, String name) {
+                return name.equals(".zip");
+            }
+        });
+        if (zips == null || zips.length == 0) {
+            return;
+        }
+
+        for (File zip : zips) {
+            if (!testDex(zip, dexDir)) {
+                log("MultiDexUtil.testDex delete invalid zip file " + zip + " " + zip.delete());
             }
         }
     }

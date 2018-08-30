@@ -44,6 +44,7 @@ import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
 import static android.support.multidex.MultiDex.useLock;
+import static android.support.multidex.MultiDex.verifyMode;
 
 /**
  * Exposes application secondary dex files as files in the application data
@@ -131,7 +132,7 @@ public final class MultiDexExtractor {
                         throw new IOException("No space left on device", e);
                     } else {
                         File testDir = new File(dexDir, "testSpaceDir");
-                        testDir.mkdirs();
+                        testDir.mkdir();
                         if (testDir.exists()) {
                             testDir.delete();
                         } else {
@@ -352,7 +353,6 @@ public final class MultiDexExtractor {
         int numAttempts = 0;
         boolean isExtractionSuccessful = false;
         while (numAttempts < MAX_EXTRACT_ATTEMPTS && !isExtractionSuccessful) {
-            numAttempts++;
 
             long start = System.currentTimeMillis();
             // Create a zip file (extractedFile) containing only the secondary dex file
@@ -376,15 +376,20 @@ public final class MultiDexExtractor {
             if (isExtractionSuccessful) {
                 long sizeInApk = dexFile.getSize();
                 long crcInApk = dexFile.getCrc();
-                MultiDex.log(dexFile.getName() + " sizeInApk:" + Long.toHexString(sizeInApk) + ", crcInApk " + Long.toHexString(crcInApk));
+                MultiDex.log(dexFile.getName() + " sizeInApk:" + sizeInApk + ", crcInApk " + Long.toHexString(crcInApk));
 
                 ZipFile classZip = new ZipFile(extractedFile);
                 ZipEntry classesEntry = classZip.getEntry("classes.dex");
                 long sizeInZip = classesEntry.getSize();
                 long crcInZip = classesEntry.getCrc();
-                MultiDex.log("classes.dex  sizeInZip:" + Long.toHexString(sizeInZip) + ", crcInZip " + Long.toHexString(crcInZip));
+                MultiDex.log("classes.dex  sizeInZip:" + sizeInZip + ", crcInZip " + Long.toHexString(crcInZip));
 
                 isExtractionSuccessful = sizeInApk == sizeInZip && crcInApk == crcInZip;
+                if (isExtractionSuccessful && verifyMode && numAttempts < MAX_EXTRACT_ATTEMPTS - 1) {
+                    long testEqualsStart = System.currentTimeMillis();
+                    isExtractionSuccessful = ZipUtil.zipEntryEquals(apk, dexFile.getName(), classZip, classesEntry.getName());
+                    MultiDex.log("classes.dex content equals " + isExtractionSuccessful + ", time:" + (System.currentTimeMillis() - testEqualsStart) + "ms");
+                }
             }
 
             // Log size and crc of the extracted zip file
@@ -399,6 +404,7 @@ public final class MultiDexExtractor {
                             extractedFile.getPath() + "'");
                 }
             }
+            numAttempts++;
         }
         if (!isExtractionSuccessful) {
             throw new IOException("Could not create zip file " +
@@ -462,12 +468,7 @@ public final class MultiDexExtractor {
         }
         for (File oldFile : files) {
             MultiDex.log("Trying to delete old file " + oldFile.getPath() + " of size " +
-                    oldFile.length());
-            if (!oldFile.delete()) {
-                MultiDex.log("Failed to delete old file " + oldFile.getPath());
-            } else {
-                MultiDex.log("Deleted old file " + oldFile.getPath());
-            }
+                    oldFile.length() + " " + oldFile.delete());
         }
     }
 
@@ -494,7 +495,6 @@ public final class MultiDexExtractor {
                 // keep zip entry time since it is the criteria used by Dalvik
                 classesDex.setTime(dexFile.getTime());
                 out.putNextEntry(classesDex);
-
                 byte[] buffer = new byte[BUFFER_SIZE];
                 int length = in.read(buffer);
                 while (length != -1) {
