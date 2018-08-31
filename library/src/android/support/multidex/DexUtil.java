@@ -1,10 +1,12 @@
 package android.support.multidex;
 
+import java.io.BufferedInputStream;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FilenameFilter;
 import java.io.IOException;
+import java.security.MessageDigest;
 
 import dalvik.system.DexFile;
 
@@ -18,21 +20,17 @@ public class DexUtil {
     private static final String DEX_SUFFIX = ".dex";
 
     /**
-     * odex file magic "dey\n036\0"
-     */
-    private static final String odexFileMagic = "6465790a30333600";
-
-    /**
-     * verify the header content of optimized dex file.<br/>
-     * /system/bin/dexopt rewrite header value ffffffffffffffff -> 6465790a30333600 at last phase, so just check file magic value.
-     * In some 4.x device, we found that generated bad odex occasionally which only contains header(40 bytes) and dex file content. Dalvikvm log
-     * message like :Unable to extract+optimize DEX from '/data/data/[package]/code_cache/secondary-dexes/[package].apk.classes2.zip', nothing useful message
-     * for resolve the issue. So this method verify and delete the cached odex file if was bad for generating new odex file in next time call makeDexElements.
+     * verify the optimized dex file.<br/>
+     * In some 4.x device, we found that dexopt generates bad odex occasionally which only contains header(40 bytes) and dex file content.
+     * Dalvikvm log message like :
+     * W/dalvikvm(23427): DexOpt: --- END '[package].apk.classes2.zip' --- status=0x000e, process failed
+     * E/dalvikvm(23427): Unable to extract+optimize DEX from '/data/data/[package]/code_cache/secondary-dexes/[package].apk.classes2.zip'
+     * Nothing useful for resolve the issue. So this method verify and delete the odex file if was bad for generating new odex file in next time call makeDexElements.
      *
      * @param dexZipFile
      * @param dexDir
-     * @param element
-     * @return
+     * @param element DexPathList.Element instance for close DexFile object
+     * @return true if it is valid
      */
     public static boolean verify(File dexZipFile, File dexDir, Object element) {
         if (testDex(dexZipFile, dexDir)) {
@@ -129,7 +127,37 @@ public class DexUtil {
                 }
             }
         }
+    }
 
+    public static String rawDexMD5(File dexFile) {
+        BufferedInputStream bis = null;
+        try {
+            bis = new BufferedInputStream(new FileInputStream(dexFile));
+            byte[] buf = new byte[40];
+            bis.read(buf);
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            int len = 0;
+            while ((len = bis.read(buf)) != -1) {
+                md.digest(buf, 0, len);
+            }
+            return byteArrayToHex(md.digest());
+        } catch (Exception e) {
+            return "rawDexMD5 " + e;
+        } finally {
+            FileUtil.close(bis);
+        }
+    }
+
+
+    public static String byteArrayToHex(byte[] byteArray) {
+        char[] hexDigits = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+        char[] resultCharArray = new char[byteArray.length * 2];
+        int index = 0;
+        for (byte b : byteArray) {
+            resultCharArray[index++] = hexDigits[b >>> 4 & 0xf];
+            resultCharArray[index++] = hexDigits[b & 0xf];
+        }
+        return new String(resultCharArray);
     }
 
     public static boolean testDex(File zip, File dexDir) {
@@ -143,7 +171,7 @@ public class DexUtil {
             log("test load odex file " + optimizedPath + " success");
             return true;
         } catch (Exception e) {
-            log("test load odex file " + optimizedPath + " failed, header content:" + headerOfDexFile(optDexFile) + ", delete file  " + new File(optimizedPath).delete());
+            log("test load odex file " + optimizedPath + " failed, header content:" + headerOfDexFile(optDexFile) + ",rawDex md5:" + rawDexMD5(optDexFile) + ", delete file  " + optDexFile.delete());
             return false;
         }
     }

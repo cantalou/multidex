@@ -773,7 +773,7 @@ public final class MultiDex {
 
                     String outputPathName = DexUtil.optimizedPathFor(zipFile, optimizedDirectory);
                     try {
-                        DexFile.loadDex(zipFile.getAbsolutePath(), outputPathName, 0);
+                        DexFile.loadDex(zipFile.getCanonicalPath(), outputPathName, 0);
                     } catch (IOException e) {
                         log("DexFile.loadDex " + e.getMessage());
                         verifyMode = true;
