@@ -29,7 +29,7 @@ public class DexUtil {
      *
      * @param dexZipFile
      * @param dexDir
-     * @param element DexPathList.Element instance for close DexFile object
+     * @param element    DexPathList.Element instance for close DexFile object
      * @return true if it is valid
      */
     public static boolean verify(File dexZipFile, File dexDir, Object element) {
@@ -51,6 +51,7 @@ public class DexUtil {
                 String dexFileName = dexFile.getName();
                 if (dexFileName.equals(zipFile.getAbsolutePath())) {
                     dexFile.close();
+                    log("close dexFile");
                 }
             }
         } catch (Exception e) {
@@ -88,7 +89,11 @@ public class DexUtil {
             }
         }
         File result = new File(optimizedDirectory, fileName);
-        return result.getPath();
+        try {
+            return result.getCanonicalPath();
+        } catch (IOException e) {
+            return result.getAbsolutePath();
+        }
     }
 
     /**
@@ -148,6 +153,24 @@ public class DexUtil {
         }
     }
 
+    public static String MD5(File zipFile) {
+        BufferedInputStream bis = null;
+        try {
+            bis = new BufferedInputStream(new FileInputStream(zipFile));
+            byte[] buf = new byte[40];
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            int len;
+            while ((len = bis.read(buf)) != -1) {
+                md.digest(buf, 0, len);
+            }
+            return byteArrayToHex(md.digest());
+        } catch (Exception e) {
+            return "MD5 " + e;
+        } finally {
+            FileUtil.close(bis);
+        }
+    }
+
 
     public static String byteArrayToHex(byte[] byteArray) {
         char[] hexDigits = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
@@ -171,7 +194,8 @@ public class DexUtil {
             log("test load odex file " + optimizedPath + " success");
             return true;
         } catch (Exception e) {
-            log("test load odex file " + optimizedPath + " failed, header content:" + headerOfDexFile(optDexFile) + ",rawDex md5:" + rawDexMD5(optDexFile) + ", delete file  " + optDexFile.delete());
+            log("test load odex file " + optimizedPath + " failed, header content:" + headerOfDexFile(optDexFile)
+                    + ",rawDex md5:" + rawDexMD5(optDexFile) + ",zip md5:" + MD5(zip) + ", delete file  " + optDexFile.delete());
             return false;
         }
     }

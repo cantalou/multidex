@@ -27,28 +27,13 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.load).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                String apkFile = "/mnt/sdcard/Download/com.m4399.gamecenter.plugin.main.4.2.0.45.295.apk";
-                String apkOptFile = "/mnt/sdcard/Download";
+                File apkFile = new File("");
+                String apkOptFile = getBaseContext().getFilesDir()
+                                                    .getAbsolutePath();
                 File dexDir = new File(apkOptFile);
                 dexDir.mkdirs();
             }
         });
-    }
-
-    private void loadApplication(Context context, String apkFile, String apkOptFile) throws ClassNotFoundException, InvocationTargetException, NoSuchMethodException, NoSuchFieldException, IOException, IllegalAccessException {
-
-        CustomClassLoader classLoader = new CustomClassLoader(apkFile, apkOptFile, getClassLoader());
-
-        Class clazz = classLoader.loadClass("com.m4399.gamecenter.plugin.main.PluginApplication");
-        Log.d("MainActivity", clazz.toString() + ", " + clazz.hashCode());
-
-        File sunDexDir = new File(apkOptFile + "/sub");
-        sunDexDir.mkdirs();
-        List<? extends File> files = MultiDexExtractor.load(context, new File(apkFile), sunDexDir, "1", false, null);
-        MultiDex.installSecondaryDexes(classLoader, sunDexDir, files);
-
-        clazz = classLoader.loadClass("tv.danmaku.ijk.media.player.IjkMediaPlayer");
-        Log.d("MainActivity", clazz.toString());
     }
 
     private void deleteFil(File file) {

@@ -764,12 +764,9 @@ public final class MultiDex {
             Object[] result = null;
             for (int i = 0, len = files.size(); i < len; i++) {
                 File zipFile = files.get(i);
-                for (int j = 0; j < MAX_DEX_OPT_RETRY_TIMES; j++) {
+                for (int j = 0; j < 10; j++) {
 
                     log("makeDexElements for " + zipFile + " time " + j);
-
-                    ArrayList<File> zipFiles = new ArrayList();
-                    zipFiles.add(zipFile);
 
                     String outputPathName = DexUtil.optimizedPathFor(zipFile, optimizedDirectory);
                     try {
@@ -780,6 +777,8 @@ public final class MultiDex {
                         new File(outputPathName).delete();
                     }
 
+                    ArrayList<File> zipFiles = new ArrayList();
+                    zipFiles.add(zipFile);
                     ArrayList<IOException> suppressedExceptions_ = new ArrayList<>();
                     Object[] dexElements = (Object[]) makeDexElements.invoke(dexPathList, zipFiles, optimizedDirectory, suppressedExceptions_);
                     if (!verifyMode) {
