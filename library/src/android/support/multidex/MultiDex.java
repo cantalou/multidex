@@ -765,13 +765,14 @@ public final class MultiDex {
             for (int i = 0, len = files.size(); i < len; i++) {
                 File zipFile = files.get(i);
                 for (int j = 0; j < 10; j++) {
-
-                    log("makeDexElements for " + zipFile + " time " + j);
-
+                    log("makeDexElements for " + zipFile + " times " + j);
                     String outputPathName = DexUtil.optimizedPathFor(zipFile, optimizedDirectory);
+                    long optTime = System.currentTimeMillis();
                     try {
                         DexFile.loadDex(zipFile.getCanonicalPath(), outputPathName, 0);
                     } catch (IOException e) {
+                        log("DexFile.loadDex outputPathName " + outputPathName);
+                        log("DexFile.loadDex error duration " + (System.currentTimeMillis() - optTime) + "ms");
                         log("DexFile.loadDex " + e.getMessage());
                         verifyMode = true;
                         new File(outputPathName).delete();
