@@ -194,7 +194,7 @@ public class DexUtil {
             log("test load odex file " + optimizedPath + " success");
             return true;
         } catch (Exception e) {
-            log("test load odex file " + optimizedPath + " failed, header content:" + headerOfDexFile(optDexFile)
+            log("test load odex file " + optimizedPath + " failed, file size:" + optDexFile.length() + ", header content:" + headerOfDexFile(optDexFile)
                     + ",optDex md5:" + MD5(optDexFile) + ",rawDex md5:" + rawDexMD5(optDexFile) + ",zip md5:" + MD5(zip) + ", delete file  " + optDexFile.delete());
             return false;
         }
