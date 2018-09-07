@@ -52,8 +52,12 @@ dependencies {
 
 afterEvaluate {
     project.tasks.findByName("assembleRelease").doLast {
+        def classFile = file("build/intermediates/packaged-classes/release/classes.jar")
+        if(!classFile.exists()){
+            classFile = file("build/intermediates/bundles/default/classes.jar")
+        }
         copy {
-            from file("build/intermediates/packaged-classes/release/classes.jar")
+            from classFile
             into file("outputs")
             rename "classes", "android-support-multidex"
         }
