@@ -44,7 +44,6 @@ import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
 import static android.support.multidex.MultiDex.useLock;
-import static android.support.multidex.MultiDex.verifyMode;
 
 /**
  * Exposes application secondary dex files as files in the application data
@@ -72,27 +71,22 @@ public final class MultiDexExtractor {
      * {@code classes3.dex}, etc.
      */
     private static final String DEX_PREFIX = "classes";
-    private static final String DEX_SUFFIX = ".dex";
-
+    static final String DEX_SUFFIX = ".dex";
     private static final String EXTRACTED_NAME_EXT = ".classes";
-    private static final String EXTRACTED_SUFFIX = ".zip";
+    static final String EXTRACTED_SUFFIX = ".zip";
     private static final int MAX_EXTRACT_ATTEMPTS = 5;
-
     private static final String PREFS_FILE = "multidex.version";
     private static final String KEY_TIME_STAMP = "timestamp";
     private static final String KEY_CRC = "crc";
     private static final String KEY_DEX_NUMBER = "dex.number";
     private static final String KEY_DEX_CRC = "dex.crc.";
     private static final String KEY_DEX_TIME = "dex.time.";
-
     /**
      * Size of reading buffers.
      */
     private static final int BUFFER_SIZE = 0x4000;
-
     /* Keep value away from 0 because it is a too probable time stamp value */
     private static final long NO_VALUE = -1L;
-
     private static final String LOCK_FILENAME = "MultiDex.lock";
 
     /**
@@ -165,7 +159,11 @@ public final class MultiDexExtractor {
                             files);
                 }
             } else {
-                MultiDex.log("Detected that extraction must be performed.");
+                if (forceReload) {
+                    MultiDex.log("Forced extraction must be performed.");
+                } else {
+                    MultiDex.log("Detected that extraction must be performed.");
+                }
                 files = performExtractions(sourceApk, dexDir, dexAsyncHandler);
                 putStoredApkInfo(context, prefsKeyPrefix, getTimeStamp(sourceApk), currentCrc,
                         files);
@@ -206,12 +204,10 @@ public final class MultiDexExtractor {
             String prefsKeyPrefix)
             throws IOException {
         MultiDex.log("loading existing secondary dex files");
-
         final String extractedFilePrefix = sourceApk.getName() + EXTRACTED_NAME_EXT;
         SharedPreferences multiDexPreferences = getMultiDexPreferences(context);
         int totalDexNumber = multiDexPreferences.getInt(prefsKeyPrefix + KEY_DEX_NUMBER, 1);
         final List<ExtractedDex> files = new ArrayList<ExtractedDex>(totalDexNumber - 1);
-
         for (int secondaryNumber = 2; secondaryNumber <= totalDexNumber; secondaryNumber++) {
             String fileName = extractedFilePrefix + secondaryNumber + EXTRACTED_SUFFIX;
             ExtractedDex extractedFile = new ExtractedDex(dexDir, fileName);
@@ -236,10 +232,8 @@ public final class MultiDexExtractor {
                         extractedFile.getPath() + "'");
             }
         }
-
         return files;
     }
-
 
     /**
      * Compare current archive and crc with values stored in {@link SharedPreferences}. Should be
@@ -261,7 +255,6 @@ public final class MultiDexExtractor {
         return timeStamp;
     }
 
-
     private static long getZipCrc(File archive) throws IOException {
         long computedValue = ZipUtil.getZipCrc(archive);
         if (computedValue == NO_VALUE) {
@@ -273,23 +266,19 @@ public final class MultiDexExtractor {
 
     private static List<ExtractedDex> performExtractions(final File sourceApk, File dexDir, final DexAsyncHandler dexAsyncHandler)
             throws IOException {
-
         final String extractedFilePrefix = sourceApk.getName() + EXTRACTED_NAME_EXT;
 
         // Ensure that whatever deletions happen in prepareDexDir only happen if the zip that
         // contains a secondary dex file in there is not consistent with the latest apk.  Otherwise,
         // multi-process race conditions can cause a crash loop where one process deletes the zip
         // while another had created it.
-        prepareDexDir(dexDir, extractedFilePrefix);
+        clearDexDir(dexDir);
 
         List<ExtractedDex> files = new ArrayList<ExtractedDex>();
-
         final ZipFile apk = new ZipFile(sourceApk);
         try {
-
             int secondaryNumber = 2;
             ZipEntry dexFile = apk.getEntry(DEX_PREFIX + secondaryNumber + DEX_SUFFIX);
-
             ExecutorService executor = null;
             ArrayList<Future<Void>> taskResult = null;
             if (dexFile != null && dexAsyncHandler != null) {
@@ -385,7 +374,7 @@ public final class MultiDexExtractor {
                 MultiDex.log("classes.dex  sizeInZip:" + sizeInZip + ", crcInZip " + Long.toHexString(crcInZip));
 
                 isExtractionSuccessful = sizeInApk == sizeInZip && crcInApk == crcInZip;
-                if (isExtractionSuccessful && verifyMode && numAttempts < MAX_EXTRACT_ATTEMPTS - 1) {
+                if (isExtractionSuccessful && MultiDex.optFailed && numAttempts < MAX_EXTRACT_ATTEMPTS - 1) {
                     long testEqualsStart = System.currentTimeMillis();
                     isExtractionSuccessful = ZipUtil.zipEntryEquals(apk, dexFile.getName(), classZip, classesEntry.getName());
                     MultiDex.log("classes.dex content equals " + isExtractionSuccessful + ", time:" + (System.currentTimeMillis() - testEqualsStart) + "ms");
@@ -443,32 +432,36 @@ public final class MultiDexExtractor {
      */
     private static SharedPreferences getMultiDexPreferences(Context context) {
         return context.getSharedPreferences(PREFS_FILE,
-                Build.VERSION.SDK_INT < 11 /* Build.VERSION_CODES.HONEYCOMB */
+                Build.VERSION.SDK_INT < Build.VERSION_CODES.HONEYCOMB /* Build.VERSION_CODES.HONEYCOMB */
                         ? Context.MODE_PRIVATE
-                        : Context.MODE_PRIVATE | 0x0004 /* Context.MODE_MULTI_PROCESS */);
+                        : Context.MODE_PRIVATE | Context.MODE_MULTI_PROCESS /* Context.MODE_MULTI_PROCESS */);
     }
 
     /**
-     * This removes old files.
+     * Clear the dex dir from all files but the lock.
      */
-    private static void prepareDexDir(File dexDir, final String extractedFilePrefix) {
-        FileFilter filter = new FileFilter() {
-
+    private static void clearDexDir(File dexDir) {
+        File[] files = dexDir.listFiles(new FileFilter() {
             @Override
             public boolean accept(File pathname) {
-                String name = pathname.getName();
-                return !(name.startsWith(extractedFilePrefix)
-                        || name.equals(LOCK_FILENAME));
+                return !pathname.getName()
+                                .equals(LOCK_FILENAME);
             }
-        };
-        File[] files = dexDir.listFiles(filter);
+        });
         if (files == null) {
             MultiDex.log("Failed to list secondary dex dir content (" + dexDir.getPath() + ").");
             return;
         }
         for (File oldFile : files) {
-            MultiDex.log("Trying to delete old file " + oldFile.getPath() + " of size " +
-                    oldFile.length() + " " + oldFile.delete());
+            String fileName = oldFile.getName();
+            if (MultiDex.optFailed) {
+                //we want to save odex if they were valid
+                if (fileName.endsWith(".zip") && !DexUtil.testDex(oldFile, dexDir)) {
+                    MultiDex.log("optFailed true, Trying to delete old file " + oldFile.getPath() + " of size " + oldFile.length() + " , result " + oldFile.delete());
+                }
+            } else {
+                MultiDex.log("optFailed false, Trying to delete old file " + oldFile.getPath() + " of size " + oldFile.length() + " , result " + oldFile.delete());
+            }
         }
     }
 

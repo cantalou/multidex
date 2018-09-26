@@ -1,11 +1,14 @@
 package android.support.multidex;
 
 import java.io.BufferedInputStream;
+import java.io.Closeable;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.FilenameFilter;
 import java.io.IOException;
+import java.io.InputStream;
 import java.security.MessageDigest;
 
 import dalvik.system.DexFile;
@@ -149,7 +152,7 @@ public class DexUtil {
         } catch (Exception e) {
             return "rawDexMD5 " + e;
         } finally {
-            FileUtil.close(bis);
+            close(bis);
         }
     }
 
@@ -157,7 +160,7 @@ public class DexUtil {
         BufferedInputStream bis = null;
         try {
             bis = new BufferedInputStream(new FileInputStream(zipFile));
-            byte[] buf = new byte[40];
+            byte[] buf = new byte[8196];
             MessageDigest md = MessageDigest.getInstance("MD5");
             int len;
             while ((len = bis.read(buf)) != -1) {
@@ -167,7 +170,7 @@ public class DexUtil {
         } catch (Exception e) {
             return "MD5 " + e;
         } finally {
-            FileUtil.close(bis);
+            close(bis);
         }
     }
 
@@ -212,17 +215,89 @@ public class DexUtil {
         File[] zips = dexDir.listFiles(new FilenameFilter() {
             @Override
             public boolean accept(File dir, String name) {
-                return name.equals(".zip");
+                return name.endsWith(".zip");
             }
         });
+
         if (zips == null || zips.length == 0) {
             return;
         }
 
         for (File zip : zips) {
             if (!testDex(zip, dexDir)) {
-                log("MultiDexUtil.testDex delete invalid zip file " + zip + " " + zip.delete());
+                log("DexUtil.testDex delete invalid zip file " + zip + " " + zip.delete());
             }
+        }
+    }
+
+    public static void close(Object... obj) {
+        for (Object o : obj) {
+            if (o instanceof Closeable) {
+                try {
+                    ((Closeable) o).close();
+                } catch (IOException e) {
+                    //ignore
+                }
+            }
+        }
+    }
+
+    /**
+     * Perform an fsync on the given FileOutputStream.  The stream at this
+     * point must be flushed but not yet closed.
+     */
+    public static boolean sync(FileOutputStream stream) {
+        try {
+            if (stream != null) {
+                stream.getFD().sync();
+            }
+            return true;
+        } catch (IOException e) {
+        }
+        return false;
+    }
+
+    // copy a file from srcFile to destFile, return true if succeed, return
+    // false if fail
+    public static boolean copyFile(File srcFile, File destFile) {
+        boolean result;
+        try {
+            InputStream in = new FileInputStream(srcFile);
+            try {
+                result = copyToFile(in, destFile);
+            } finally  {
+                in.close();
+            }
+        } catch (IOException e) {
+            result = false;
+        }
+        return result;
+    }
+
+    /**
+     * Copy data from a source stream to destFile.
+     * Return true if succeed, return false if failed.
+     */
+    public static boolean copyToFile(InputStream inputStream, File destFile) {
+        try {
+            if (destFile.exists()) {
+                destFile.delete();
+            }
+            FileOutputStream out = new FileOutputStream(destFile);
+            try {
+                byte[] buffer = new byte[4096];
+                int bytesRead;
+                while ((bytesRead = inputStream.read(buffer)) >= 0) {
+                    out.write(buffer, 0, bytesRead);
+                }
+            } finally {
+                out.flush();
+                sync(out);
+                out.close();
+            }
+            return true;
+        } catch (IOException e) {
+            return false;
         }
     }
 }

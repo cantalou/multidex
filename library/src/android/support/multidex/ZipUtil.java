@@ -169,7 +169,7 @@ final class ZipUtil {
         } catch (IOException e) {
             return false;
         } finally {
-            FileUtil.close(srcIn, destIn);
+            DexUtil.close(srcIn, destIn);
         }
     }
 
