@@ -612,10 +612,12 @@ public final class MultiDex {
 
         File testWrite = new File(dir, "test");
         try {
-            testWrite.delete();
-            testWrite.createNewFile();
+            if(useLock){
+                testWrite.delete();
+                testWrite.createNewFile();
+            }
 
-            if (!dir.isDirectory() || !testWrite.exists()) {
+            if (!dir.isDirectory() || (!testWrite.exists() && useLock)) {
                 File parent = dir.getParentFile();
                 if (parent == null) {
                     log("Failed to create dir " + dir.getPath() + ". Parent file is null.");
