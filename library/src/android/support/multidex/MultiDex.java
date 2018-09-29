@@ -610,43 +610,14 @@ public final class MultiDex {
             dir.mkdir();
         }
 
-        File testWrite = new File(dir, "test");
-        try {
-            if(useLock){
-                testWrite.delete();
-                testWrite.createNewFile();
+        if (!dir.isDirectory()) {
+            File parent = dir.getParentFile();
+            if (parent == null) {
+                log("Failed to create dir " + dir.getPath() + ". Parent file is null.");
+            } else {
+                log("Failed to create dir " + dir.getPath() + ". parent file is a dir " + parent.isDirectory() + ", a file " + parent.isFile() + ", exists " + parent.exists() + ", readable " + parent.canRead() + ", writable " + parent.canWrite());
             }
-
-            if (!dir.isDirectory() || (!testWrite.exists() && useLock)) {
-                File parent = dir.getParentFile();
-                if (parent == null) {
-                    log("Failed to create dir " + dir.getPath() + ". Parent file is null.");
-                } else {
-                    log("Failed to create dir " + dir.getPath() + ". parent file is a dir " + parent.isDirectory() + ", a file " + parent.isFile() + ", exists " + parent.exists() + ", readable " + parent.canRead() + ", writable " + parent.canWrite());
-                }
-                throw new IOException("Failed to create directory " + dir.getPath());
-            }
-        } catch (IOException e) {
-            String msg = Log.getStackTraceString(e);
-            if (msg != null && msg.contains("No space left on device")) {
-                File[] files = dir.listFiles(new FilenameFilter() {
-                    @Override
-                    public boolean accept(File dir, String name) {
-                        return name.endsWith(".zip");
-                    }
-                });
-                if (files != null) {
-                    for (File file : files) {
-                        if (!DexUtil.testDex(file, dir)) {
-                            throw e;
-                        }
-                    }
-                }
-                //ignore
-            }
-
-        } finally {
-            testWrite.delete();
+            throw new IOException("Failed to create directory " + dir.getPath());
         }
     }
 
