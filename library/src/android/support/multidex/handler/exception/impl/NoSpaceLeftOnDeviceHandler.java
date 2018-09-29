@@ -48,6 +48,7 @@ public class NoSpaceLeftOnDeviceHandler extends AbstractHandler {
         }
 
         if (file.isDirectory()) {
+            MultiDex.log("start to delete dir " + file);
             File[] files = file.listFiles();
             if (files != null) {
                 for (File subFile : files) {

@@ -1,13 +1,19 @@
 package android.support.multidex;
 
-import android.text.TextUtils;
-
+import java.io.BufferedInputStream;
+import java.io.Closeable;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.FilenameFilter;
 import java.io.IOException;
+import java.io.InputStream;
+import java.security.MessageDigest;
 
 import dalvik.system.DexFile;
+
+import static android.support.multidex.MultiDex.log;
 
 /**
  * Tools to check odex file and remove if it was bad
@@ -17,39 +23,23 @@ public class DexUtil {
     private static final String DEX_SUFFIX = ".dex";
 
     /**
-     * odex file magic "dey\n036\0"
-     */
-    private static final String odexFileMagic = "6465790a30333600";
-
-    /**
-     * verify the header content of optimized dex file.<br/>
-     * /system/bin/dexopt rewrite header value ffffffffffffffff -> 6465790a30333600 at last phase, so just check file magic value.
-     * In some 4.x device, we found that generated bad odex occasionally which only contains header(40 bytes) and dex file content. Dalvikvm log
-     * message like :Unable to extract+optimize DEX from '/data/data/[package]/code_cache/secondary-dexes/[package].apk.classes2.zip', nothing useful message
-     * for resolve the issue. So this method verify and delete the cached odex file if was bad for generating new odex file in next time call makeDexElements.
+     * verify the optimized dex file.<br/>
+     * In some 4.x device, we found that dexopt generates bad odex occasionally which only contains header(40 bytes) and dex file content.
+     * Dalvikvm log message like :
+     * W/dalvikvm(23427): DexOpt: --- END '[package].apk.classes2.zip' --- status=0x000e, process failed
+     * E/dalvikvm(23427): Unable to extract+optimize DEX from '/data/data/[package]/code_cache/secondary-dexes/[package].apk.classes2.zip'
+     * Nothing useful for resolve the issue. So this method verify and delete the odex file if was bad for generating new odex file in next time call makeDexElements.
      *
      * @param dexZipFile
      * @param dexDir
-     * @param element
-     * @return
+     * @param element    DexPathList.Element instance for close DexFile object
+     * @return true if it is valid
      */
     public static boolean verify(File dexZipFile, File dexDir, Object element) {
-        try {
-            File optDexFile = new File(optimizedPathFor(dexZipFile, dexDir));
-            if (!optDexFile.exists()) {
-                return false;
-            }
-            MultiDex.log("verify opt dex file " + optDexFile);
-            String headerContent = headerOfDexFile(optDexFile);
-            if (!TextUtils.isEmpty(headerContent) && headerContent.startsWith(odexFileMagic)) {
-                return true;
-            }
-            MultiDex.log("odex file header content was bad:" + headerContent);
-            closeDexFile(dexZipFile, element);
-            MultiDex.log("delete file " + optDexFile.delete());
-        } catch (IOException e) {
-            MultiDex.log("verify error ", e);
+        if (testDex(dexZipFile, dexDir)) {
+            return true;
         }
+        closeDexFile(dexZipFile, element);
         return false;
     }
 
@@ -64,10 +54,11 @@ public class DexUtil {
                 String dexFileName = dexFile.getName();
                 if (dexFileName.equals(zipFile.getAbsolutePath())) {
                     dexFile.close();
+                    log("close dexFile");
                 }
             }
         } catch (Exception e) {
-            MultiDex.log("can not get file dexFile from element ", e);
+            log("can not get file dexFile from element ", e);
         }
     }
 
@@ -75,7 +66,7 @@ public class DexUtil {
      * Converts a dex/jar file path and an output directory to an
      * output file path for an associated optimized dex file.
      */
-    private static String optimizedPathFor(File path, File optimizedDirectory) {
+    public static String optimizedPathFor(File path, File optimizedDirectory) {
         /*
          * Get the filename component of the path, and replace the
          * suffix with ".dex" if that's not already the suffix.
@@ -101,7 +92,11 @@ public class DexUtil {
             }
         }
         File result = new File(optimizedDirectory, fileName);
-        return result.getPath();
+        try {
+            return result.getCanonicalPath();
+        } catch (IOException e) {
+            return result.getAbsolutePath();
+        }
     }
 
     /**
@@ -110,13 +105,17 @@ public class DexUtil {
      * @param dexFile
      * @return header content of opt dex file in hex format
      */
-    public static String headerOfDexFile(File dexFile) throws IOException {
+    public static String headerOfDexFile(File dexFile) {
         DataInputStream dis = null;
         try {
             StringBuilder msg = new StringBuilder(40 * 2);
             dis = new DataInputStream(new FileInputStream(dexFile));
             for (int i = 0; i < 40; i++) {
-                String value = Integer.toHexString(dis.read());
+                int data = dis.read();
+                if (data == -1) {
+                    break;
+                }
+                String value = Integer.toHexString(data);
                 if (value.length() == 2) {
                     msg.append(value);
                 } else {
@@ -125,6 +124,8 @@ public class DexUtil {
                 }
             }
             return msg.toString();
+        } catch (IOException e) {
+            return "read error " + e;
         } finally {
             if (dis != null) {
                 try {
@@ -133,6 +134,170 @@ public class DexUtil {
                     //ignore
                 }
             }
+        }
+    }
+
+    public static String rawDexMD5(File dexFile) {
+        BufferedInputStream bis = null;
+        try {
+            bis = new BufferedInputStream(new FileInputStream(dexFile));
+            byte[] buf = new byte[40];
+            bis.read(buf);
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            int len = 0;
+            while ((len = bis.read(buf)) != -1) {
+                md.digest(buf, 0, len);
+            }
+            return byteArrayToHex(md.digest());
+        } catch (Exception e) {
+            return "rawDexMD5 " + e;
+        } finally {
+            close(bis);
+        }
+    }
+
+    public static String MD5(File zipFile) {
+        BufferedInputStream bis = null;
+        try {
+            bis = new BufferedInputStream(new FileInputStream(zipFile));
+            byte[] buf = new byte[8196];
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            int len;
+            while ((len = bis.read(buf)) != -1) {
+                md.digest(buf, 0, len);
+            }
+            return byteArrayToHex(md.digest());
+        } catch (Exception e) {
+            return "MD5 " + e;
+        } finally {
+            close(bis);
+        }
+    }
+
+
+    public static String byteArrayToHex(byte[] byteArray) {
+        char[] hexDigits = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+        char[] resultCharArray = new char[byteArray.length * 2];
+        int index = 0;
+        for (byte b : byteArray) {
+            resultCharArray[index++] = hexDigits[b >>> 4 & 0xf];
+            resultCharArray[index++] = hexDigits[b & 0xf];
+        }
+        return new String(resultCharArray);
+    }
+
+    public static boolean testDex(File zip, File dexDir) {
+        String optimizedPath = optimizedPathFor(zip, dexDir);
+        File optDexFile = new File(optimizedPath);
+        if (!optDexFile.exists()) {
+            return false;
+        }
+        try {
+            DexFile.loadDex(zip.getCanonicalPath(), optimizedPath, 0);
+            log("test load odex file " + optimizedPath + " success");
+            return true;
+        } catch (Exception e) {
+            log("test load odex file " + optimizedPath + " failed, file size:" + optDexFile.length() + ", header content:" + headerOfDexFile(optDexFile)
+                    + ",optDex md5:" + MD5(optDexFile) + ",rawDex md5:" + rawDexMD5(optDexFile) + ",zip md5:" + MD5(zip) + ", delete file  " + optDexFile.delete());
+            return false;
+        }
+    }
+
+    public static boolean testDex(String zip, File dexDir) {
+        return testDex(new File(zip), dexDir);
+    }
+
+    public static void deleteInvalid(File dexDir) {
+        if (dexDir == null || !dexDir.exists()) {
+            return;
+        }
+
+        File[] zips = dexDir.listFiles(new FilenameFilter() {
+            @Override
+            public boolean accept(File dir, String name) {
+                return name.endsWith(".zip");
+            }
+        });
+
+        if (zips == null || zips.length == 0) {
+            return;
+        }
+
+        for (File zip : zips) {
+            if (!testDex(zip, dexDir)) {
+                log("DexUtil.testDex delete invalid zip file " + zip + " " + zip.delete());
+            }
+        }
+    }
+
+    public static void close(Object... obj) {
+        for (Object o : obj) {
+            if (o instanceof Closeable) {
+                try {
+                    ((Closeable) o).close();
+                } catch (IOException e) {
+                    //ignore
+                }
+            }
+        }
+    }
+
+    /**
+     * Perform an fsync on the given FileOutputStream.  The stream at this
+     * point must be flushed but not yet closed.
+     */
+    public static boolean sync(FileOutputStream stream) {
+        try {
+            if (stream != null) {
+                stream.getFD().sync();
+            }
+            return true;
+        } catch (IOException e) {
+        }
+        return false;
+    }
+
+    // copy a file from srcFile to destFile, return true if succeed, return
+    // false if fail
+    public static boolean copyFile(File srcFile, File destFile) {
+        boolean result;
+        try {
+            InputStream in = new FileInputStream(srcFile);
+            try {
+                result = copyToFile(in, destFile);
+            } finally  {
+                in.close();
+            }
+        } catch (IOException e) {
+            result = false;
+        }
+        return result;
+    }
+
+    /**
+     * Copy data from a source stream to destFile.
+     * Return true if succeed, return false if failed.
+     */
+    public static boolean copyToFile(InputStream inputStream, File destFile) {
+        try {
+            if (destFile.exists()) {
+                destFile.delete();
+            }
+            FileOutputStream out = new FileOutputStream(destFile);
+            try {
+                byte[] buffer = new byte[4096];
+                int bytesRead;
+                while ((bytesRead = inputStream.read(buffer)) >= 0) {
+                    out.write(buffer, 0, bytesRead);
+                }
+            } finally {
+                out.flush();
+                sync(out);
+                out.close();
+            }
+            return true;
+        } catch (IOException e) {
+            return false;
         }
     }
 }

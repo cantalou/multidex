@@ -16,7 +16,6 @@
 
 buildscript {
     repositories {
-        google()
         maven {
             url uri('./repo')
         }
@@ -26,7 +25,7 @@ buildscript {
         }
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:2.2.0'
+        classpath 'com.android.tools.build:gradle:2.3.3'
         classpath "com.gradle.publish:plugin-publish-plugin:0.9.7"
         classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.7'
     }
@@ -36,12 +35,15 @@ allprojects {
 
     ext{
         _compileSdkVersion = 23
-        _buildToolsVersion = "23.0.2"
+        _buildToolsVersion = "27.0.3"
     }
 
     repositories {
-        google()
         jcenter()
+        maven {
+            url 'https://maven.google.com/'
+            name 'Google'
+        }
     }
 
     tasks.withType(JavaCompile) {
