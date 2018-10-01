@@ -17,8 +17,7 @@
 apply plugin: 'com.android.library'
 
 android {
-    compileSdkVersion 26
-    buildToolsVersion "23.0.2"
+    compileSdkVersion _compileSdkVersion
 
     defaultConfig {
         minSdkVersion 14
@@ -45,9 +44,9 @@ android {
 }
 
 dependencies {
-    testCompile 'junit:junit:4.12'
-    androidTestCompile 'com.android.support.test:runner:1.0.2'
-    androidTestCompile 'com.android.support.test.espresso:espresso-core:3.0.2'
+    testImplementation 'junit:junit:4.12'
+    androidTestImplementation 'com.android.support.test:runner:1.0.2'
+    androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
 }
 
 afterEvaluate {
