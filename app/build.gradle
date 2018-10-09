@@ -4,7 +4,6 @@ apply plugin: 'com.android.application'
 
 android {
     compileSdkVersion _compileSdkVersion
-    buildToolsVersion _buildToolsVersion
 
     defaultConfig {
         applicationId "com.cantalou.divider.app"
@@ -17,16 +16,34 @@ android {
 //        multiDexKeepProguard = file("multidex-config.pro")
     }
 
+    signingConfigs {
+        release {
+            storeFile file("cantalou.keystore")
+            storePassword "cantalou"
+            keyAlias "cantalou"
+            keyPassword "cantalou"
+            v2SigningEnabled false
+        }
+        debug {
+            storeFile file("cantalou.keystore")
+            storePassword "cantalou"
+            keyAlias "cantalou"
+            keyPassword "cantalou"
+            v2SigningEnabled false
+        }
+    }
+
     dexOptions {
         jumboMode = true
         preDexLibraries = false
-        additionalParameters("--set-max-idx-number=52000","--minimal-main-dex")
+        additionalParameters("--set-max-idx-number=52000", "--minimal-main-dex")
     }
 
     buildTypes {
         release {
-            minifyEnabled false
+            minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
         }
     }
     compileOptions {
@@ -36,30 +53,29 @@ android {
 }
 
 dependencies {
-    compile fileTree(dir: 'libs', include: ['*.jar'])
-    compile 'io.reactivex.rxjava2:rxjava:2.1.4'
-    compile 'com.android.support:appcompat-v7:23.+'
-    compile 'com.android.support.constraint:constraint-layout:1.0.2'
-    compile 'com.google.dagger:dagger:2.2'
-    compile 'com.squareup.retrofit2:retrofit:2.0.0-beta4'
-    compile 'com.squareup.retrofit2:converter-gson:2.0.0-beta4'
-    compile 'com.google.code.gson:gson:2.6.2'
-    compile 'commons-io:commons-io:2.0.1'
-    compile "com.google.guava:guava:17.0"
-    compile "org.ow2.asm:asm-debug-all:5.0.1"
-    compile "org.jacoco:org.jacoco.core:0.7.4.201502262128"
-    compile "org.antlr:antlr:3.5.2"
-    compile 'com.github.bumptech.glide:glide:3.8.0'
-    compile 'com.github.bumptech.glide:volley-integration:1.2.2'
-    compile 'com.mcxiaoke.volley:library:1.0.5'
-    compile 'com.squareup.okhttp:okhttp:2.4.0'
-    compile 'com.squareup.picasso:picasso:2.5.2'
-    compile "com.squareup.retrofit:retrofit:1.4.1"
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation 'io.reactivex.rxjava2:rxjava:2.1.4'
+    implementation 'com.android.support:appcompat-v7:23.+'
+    implementation 'com.android.support.constraint:constraint-layout:1.0.2'
+    implementation 'com.google.dagger:dagger:2.2'
+    implementation 'com.squareup.retrofit2:retrofit:2.0.0-beta4'
+    implementation 'com.squareup.retrofit2:converter-gson:2.0.0-beta4'
+    implementation 'com.google.code.gson:gson:2.6.2'
+    implementation 'commons-io:commons-io:2.0.1'
+    implementation "com.google.guava:guava:17.0"
+    implementation "org.ow2.asm:asm-debug-all:5.0.1"
+    implementation "org.jacoco:org.jacoco.core:0.7.4.201502262128"
+    implementation "org.antlr:antlr:3.5.2"
+    implementation 'com.github.bumptech.glide:glide:3.8.0'
+    implementation 'com.github.bumptech.glide:volley-integration:1.2.2'
+    implementation 'com.mcxiaoke.volley:library:1.0.5'
+    implementation 'com.squareup.okhttp:okhttp:2.4.0'
+    implementation 'com.squareup.picasso:picasso:2.5.2'
+    implementation "com.squareup.retrofit:retrofit:1.4.1"
 
-    compile project(":android-support-multidex")
+    implementation project(":android-support-multidex")
 }
 
 configurations.all {
     exclude group: 'com.android.support', module: 'multidex'
 }
-
