@@ -219,7 +219,7 @@ public final class MultiDex {
                     throw new RuntimeException("MultiDex retry installation failed (" + msg + ").", e1);
                 }
             } else {
-                throw new RuntimeException("MultiDex installation failed (" + msg + ").");
+                throw new RuntimeException("MultiDex installation failed (" + msg + ").", e);
             }
         }
         log("install done");
@@ -610,7 +610,7 @@ public final class MultiDex {
             dir.mkdir();
         }
 
-        if (!dir.isDirectory()) {
+        if (!dir.isDirectory() || !dir.exists()) {
             File parent = dir.getParentFile();
             if (parent == null) {
                 log("Failed to create dir " + dir.getPath() + ". Parent file is null.");
@@ -667,9 +667,6 @@ public final class MultiDex {
                 }
 
                 suppressedExceptionsField.set(dexPathList, dexElementsSuppressedExceptions);
-//                IOException exception = new IOException("I/O exception during makeDexElement");
-//                exception.initCause(suppressedExceptions.get(0));
-//                throw exception;
             }
         }
 
@@ -729,7 +726,14 @@ public final class MultiDex {
             if (lastException != null) {
                 suppressedExceptions.add(lastException);
             }
-            return result;
+
+            ArrayList notNullResult = new ArrayList();
+            for (Object o : result) {
+                if(o != null){
+                    notNullResult.add(o);
+                }
+            }
+            return notNullResult.toArray();
         }
     }
 
@@ -915,7 +919,13 @@ public final class MultiDex {
                     }
                 }
             }
-            return result;
+            ArrayList notNullResult = new ArrayList();
+            for (Object o : result) {
+                if(o != null){
+                    notNullResult.add(o);
+                }
+            }
+            return notNullResult.toArray();
         }
 
         /**
