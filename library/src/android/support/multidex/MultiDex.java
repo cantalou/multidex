@@ -28,7 +28,6 @@ import android.util.Log;
 import android.util.SparseArray;
 
 import java.io.File;
-import java.io.FilenameFilter;
 import java.io.IOException;
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
@@ -200,6 +199,10 @@ public final class MultiDex {
                     log("MultiDex.doInstallation start to delete invalid file");
                     DexUtil.deleteInvalid(mainDexDir);
                     MultiDex.optFailed = true;
+                }
+                if(i > 3){
+                    String[] optionalSuffix = new String[]{".zip", ".apk", ".jar"};
+                    MultiDexExtractor.EXTRACTED_SUFFIX = optionalSuffix[i % 3];
                 }
             }
         } catch (Exception e) {

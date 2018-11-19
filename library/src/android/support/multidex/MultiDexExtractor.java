@@ -73,7 +73,7 @@ public final class MultiDexExtractor {
     private static final String DEX_PREFIX = "classes";
     static final String DEX_SUFFIX = ".dex";
     private static final String EXTRACTED_NAME_EXT = ".classes";
-    static final String EXTRACTED_SUFFIX = ".zip";
+    public static String EXTRACTED_SUFFIX = ".zip";
     private static final int MAX_EXTRACT_ATTEMPTS = 5;
     private static final String PREFS_FILE = "multidex.version";
     private static final String KEY_TIME_STAMP = "timestamp";
