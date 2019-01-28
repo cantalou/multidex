@@ -211,8 +211,10 @@ public final class MultiDex {
                     log("MultiDex.install start to delete invalid file");
                     DexUtil.deleteInvalid(mainDexDir);
                     MultiDex.optFailed = true;
-                }else{
-                    dexPreferences.edit().putString(DEX_PREFERENCE_KEY, secondaryFolderName);
+                }else if(i > 3){
+                    SharedPreferences.Editor editor = dexPreferences.edit();
+                    editor.putString(DEX_PREFERENCE_KEY, secondaryFolderName);
+                    editor.commit();
                 }
             }
         } catch (Exception e) {
