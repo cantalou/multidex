@@ -18,6 +18,7 @@ package android.support.multidex;
 
 import android.app.Application;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.os.Build;
 import android.support.multidex.handler.exception.ExceptionHandler;
@@ -87,6 +88,10 @@ public final class MultiDex {
     private static final String FIELD_NAME_PATH_LIST = "pathList";
 
     private static final int LOAD_DEX_TIMES = 3;
+
+    public static final String  DEX_PREFERENCE_FILE_NAME = "multidex.dex";
+
+    public static final String  DEX_PREFERENCE_KEY = "multidex.dex.dir";
 
     /**
      * test mode: Delete cached dex file and zip file every time when install method called
@@ -192,17 +197,22 @@ public final class MultiDex {
 
         try {
             boolean optResult = false;
+            SharedPreferences dexPreferences = context.getSharedPreferences(DEX_PREFERENCE_FILE_NAME, Context.MODE_PRIVATE);
+            String secondaryFolderName = dexPreferences.getString(DEX_PREFERENCE_KEY, CODE_CACHE_SECONDARY_FOLDER_NAME);
             for (int i = 0; i < MAX_DEX_OPT_RETRY_TIMES && !optResult; i++) {
-                optResult = doInstallation(context, new File(applicationInfo.sourceDir), new File(applicationInfo.dataDir), CODE_CACHE_SECONDARY_FOLDER_NAME, NO_KEY_PREFIX, mode, classNames);
-                log("MultiDex.doInstallation times " + i + ", result " + optResult);
+                if(i > 3){
+                    clearSecondaryCodeCache(context, new File(applicationInfo.dataDir), secondaryFolderName);
+                    secondaryFolderName = CODE_CACHE_SECONDARY_FOLDER_NAME + i;
+                    log("MultiDex.install change secondaryFolderName from '" + CODE_CACHE_SECONDARY_FOLDER_NAME + "' to '" + secondaryFolderName + "'");
+                }
+                optResult = doInstallation(context, new File(applicationInfo.sourceDir), new File(applicationInfo.dataDir), secondaryFolderName, NO_KEY_PREFIX, mode, classNames);
+                log("MultiDex.install times " + i + ", result " + optResult);
                 if (!optResult) {
-                    log("MultiDex.doInstallation start to delete invalid file");
+                    log("MultiDex.install start to delete invalid file");
                     DexUtil.deleteInvalid(mainDexDir);
                     MultiDex.optFailed = true;
-                }
-                if(i > 3){
-                    String[] optionalSuffix = new String[]{".zip", ".apk", ".jar"};
-                    MultiDexExtractor.EXTRACTED_SUFFIX = optionalSuffix[i % 3];
+                }else{
+                    dexPreferences.edit().putString(DEX_PREFERENCE_KEY, secondaryFolderName);
                 }
             }
         } catch (Exception e) {
@@ -228,6 +238,38 @@ public final class MultiDex {
         log("install done");
     }
 
+    /**
+     * clear cache file when we change secondary dir name
+     *
+     * @param context
+     * @param dataDir
+     * @param secondaryFolderName
+     */
+    public static void clearSecondaryCodeCache(Context context, File dataDir, String secondaryFolderName)
+    {
+        try
+        {
+            File dexDir = getDexDir(context, dataDir, secondaryFolderName);
+            if (!dexDir.exists())
+            {
+                return;
+            }
+            File[] subFile = dexDir.listFiles();
+            if (subFile == null)
+            {
+                return;
+            }
+            for (File file : subFile)
+            {
+                file.delete();
+            }
+        }
+        catch (Exception e)
+        {
+            //ignore if we can not delete file
+            log("clearSecondaryCodeCache failure ", e);
+        }
+    }
 
     public static void installWithExceptionHandle(Context context, Callable runnable) {
         try {
