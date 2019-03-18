@@ -71,7 +71,7 @@ public final class MultiDex {
 
     private static final String CODE_CACHE_NAME = "code_cache";
 
-    public static final String CODE_CACHE_SECONDARY_FOLDER_NAME = "secondary-dexes";
+    private static final String CODE_CACHE_SECONDARY_FOLDER_NAME = "secondary-dexes";
 
     private static final int MAX_SUPPORTED_SDK_VERSION = 20;
 
@@ -85,7 +85,7 @@ public final class MultiDex {
 
     private static final Set<File> installedApk = new HashSet<File>();
 
-    public static final boolean IS_VM_MULTIDEX_CAPABLE = isVMMultidexCapable(System.getProperty("java.vm.version"));
+    private static final boolean IS_VM_MULTIDEX_CAPABLE = isVMMultidexCapable(System.getProperty("java.vm.version"));
 
     private static final String FIELD_NAME_PATH_LIST = "pathList";
 
@@ -137,11 +137,11 @@ public final class MultiDex {
 
     private static ArrayList<ExceptionHandler> handlers = new ArrayList<>();
 
-    public static File mainDexDir;
+    private static File mainDexDir;
 
-    public static boolean optFailed = false;
+    static boolean optFailed = false;
 
-    public static String method = "";
+    private static String method = "";
 
     static {
         handlers.add(new ReadOnlySystemHandle());
@@ -507,6 +507,10 @@ public final class MultiDex {
                 mode = count > 1 ? MODE_PARALLEL : MODE_SERIAL;
                 log("CUP core number is " + count + ", choose mode " + (count > 1 ? "MODE_PARALLEL" : "MODE_SERIAL"));
             }
+
+            //force serial mode
+            mode = MODE_SERIAL;
+
             List<? extends File> files = null;
             log("Use mode " + Integer.toBinaryString(mode) + " to load extract and dex opt");
             if (mode == MODE_SERIAL) {
