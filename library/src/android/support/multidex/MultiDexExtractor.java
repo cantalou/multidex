@@ -241,7 +241,14 @@ public final class MultiDexExtractor {
      */
     private static boolean isModified(Context context, File archive, long currentCrc, String prefsKeyPrefix) {
         SharedPreferences prefs = getMultiDexPreferences(context);
-        return (prefs.getLong(prefsKeyPrefix + KEY_TIME_STAMP, NO_VALUE) != getTimeStamp(archive)) || (prefs.getLong(prefsKeyPrefix + KEY_CRC, NO_VALUE) != currentCrc);
+
+        long expectTimestamp = prefs.getLong(prefsKeyPrefix + KEY_TIME_STAMP, NO_VALUE);
+        long expectCrc = prefs.getLong(prefsKeyPrefix + KEY_CRC, NO_VALUE);
+        MultiDex.log("expect timestamp " + expectTimestamp + ", crc " + expectCrc);
+
+        long actualTimeStamp = getTimeStamp(archive);
+        MultiDex.log("actual timestamp " + actualTimeStamp + ", crc " + currentCrc);
+        return (expectTimestamp != actualTimeStamp) || (expectCrc != currentCrc);
     }
 
     private static long getTimeStamp(File archive) {

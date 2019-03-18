@@ -203,13 +203,16 @@ public final class MultiDex {
 
             optResult = normalInstall(context, mode, sourceApk, dataDir, classNames);
 
-            if (!optResult) {
-                optResult = renameInstall(context, mode, sourceApk, dataDir, destDexDir, classNames);
+            if (optResult) {
+                return;
             }
+
+            optResult = renameInstall(context, mode, sourceApk, dataDir, destDexDir, classNames);
 
             if (!optResult) {
                 externalInstall(context, mode, sourceApk, dataDir, destDexDir, classNames);
             }
+
             doInstallation(context, sourceApk, dataDir, CODE_CACHE_SECONDARY_FOLDER_NAME, NO_KEY_PREFIX, mode, classNames);
 
         } catch (Exception e) {
