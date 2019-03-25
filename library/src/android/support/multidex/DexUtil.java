@@ -120,7 +120,7 @@ class DexUtil {
                     msg.append(value);
                 } else {
                     msg.append("0")
-                       .append(value);
+                            .append(value);
                 }
             }
             return msg.toString();
@@ -224,8 +224,13 @@ class DexUtil {
         }
 
         for (File zip : zips) {
+            String name = zip.getName();
+            if (name.startsWith("tmp-")) {
+                log("DexUtil.deleteInvalid delete invalid tmp zip file " + zip + " " + zip.delete());
+                continue;
+            }
             if (!testDex(zip, dexDir)) {
-                log("DexUtil.testDex delete invalid zip file " + zip + " " + zip.delete());
+                log("DexUtil.deleteInvalid delete invalid zip file " + zip + " " + zip.delete());
             }
         }
     }
@@ -265,7 +270,7 @@ class DexUtil {
             InputStream in = new FileInputStream(srcFile);
             try {
                 result = copyToFile(in, destFile);
-            } finally  {
+            } finally {
                 in.close();
             }
         } catch (IOException e) {

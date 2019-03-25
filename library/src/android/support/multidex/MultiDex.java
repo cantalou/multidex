@@ -141,7 +141,7 @@ public final class MultiDex {
 
     static boolean optFailed = false;
 
-    private static String method = "";
+    private static String installInfo = "";
 
     static {
         handlers.add(new ReadOnlySystemHandle());
@@ -238,13 +238,30 @@ public final class MultiDex {
         log("install done");
     }
 
+    private static boolean normalInstall(Context context, int mode, File sourceApk, File dataDir, String[] classNames) throws IOException, IllegalAccessException, NoSuchFieldException, InvocationTargetException, NoSuchMethodException, ClassNotFoundException, InstantiationException {
+        boolean optResult = false;
+        log(" ");
+        log("MultiDex.normalInstall install");
+        for (int i = 0; i < 5 && !optResult; i++) {
+            installInfo = "normalInstall" + i;
+            optResult = doInstallation(context, sourceApk, dataDir, CODE_CACHE_SECONDARY_FOLDER_NAME, NO_KEY_PREFIX, mode, classNames);
+            log("MultiDex.normalInstall times " + i + ", result " + optResult);
+            if (!optResult) {
+                log("MultiDex.normalInstall start to delete invalid file");
+                DexUtil.deleteInvalid(mainDexDir);
+                MultiDex.optFailed = true;
+            }
+        }
+        return optResult;
+    }
+
     private static boolean renameInstall(Context context, int mode, File sourceApk, File dataDir, File destDexDir, String[] classNames) throws IOException, IllegalAccessException, NoSuchFieldException, InvocationTargetException, NoSuchMethodException, ClassNotFoundException, InstantiationException {
         boolean optResult = false;
-        method = "renameInstall";
         log(" ");
         log("MultiDex.renameInstall try to install in new dir");
 
-        for (int i = 0; i < 3 && !optResult; i++) {
+        for (int i = 0; i < 4 && !optResult; i++) {
+            installInfo = "renameInstall" + i;
             String secondaryFolderName = CODE_CACHE_SECONDARY_FOLDER_NAME + i;
             File srcDexDir = getDexDir(context, dataDir, secondaryFolderName);
             log("MultiDex.renameInstall change secondaryFolderName to '" + secondaryFolderName + "'");
@@ -260,25 +277,7 @@ public final class MultiDex {
         return optResult;
     }
 
-    private static boolean normalInstall(Context context, int mode, File sourceApk, File dataDir, String[] classNames) throws IOException, IllegalAccessException, NoSuchFieldException, InvocationTargetException, NoSuchMethodException, ClassNotFoundException, InstantiationException {
-        method = "renameInstall";
-        boolean optResult = false;
-        log(" ");
-        log("MultiDex.normalInstall install");
-        for (int i = 0; i < 2 && !optResult; i++) {
-            optResult = doInstallation(context, sourceApk, dataDir, CODE_CACHE_SECONDARY_FOLDER_NAME, NO_KEY_PREFIX, mode, classNames);
-            log("MultiDex.normalInstall times " + i + ", result " + optResult);
-            if (!optResult) {
-                log("MultiDex.normalInstall start to delete invalid file");
-                DexUtil.deleteInvalid(mainDexDir);
-                MultiDex.optFailed = true;
-            }
-        }
-        return optResult;
-    }
-
     private static boolean externalInstall(Context context, int mode, File sourceApk, File dataDir, File destDexDir, String[] classNames) throws IOException, IllegalAccessException, NoSuchFieldException, InvocationTargetException, NoSuchMethodException, ClassNotFoundException, InstantiationException {
-        method = "externalInstall";
         boolean optResult = false;
         log(" ");
         log("MultiDex.externalInstall try to install in external dir");
@@ -290,7 +289,8 @@ public final class MultiDex {
             log("MultiDex.externalInstall use " + externalDataDir + " for installing");
         }
 
-        for (int i = 0; i < 2 && !optResult; i++) {
+        for (int i = 0; i < 3 && !optResult; i++) {
+            installInfo = "externalInstall" + i;
             optResult = true;
             String secondaryFolderName = CODE_CACHE_SECONDARY_FOLDER_NAME + i;
             File srcDexDir = getDexDir(context, externalDataDir, secondaryFolderName);
@@ -304,7 +304,6 @@ public final class MultiDex {
                     openDexFileMethod.invoke(null, file.getAbsolutePath(), outputPathName, 0);
                     optResult = optResult && true;
                 } catch (Exception e) {
-                    log(Log.getStackTraceString(e));
                     file.delete();
                     new File(outputPathName).delete();
                     optResult = false;
@@ -1192,6 +1191,6 @@ public final class MultiDex {
 
     @Override
     public String toString() {
-        return method;
+        return installInfo;
     }
 }
