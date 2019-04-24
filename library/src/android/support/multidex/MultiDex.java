@@ -71,7 +71,7 @@ public final class MultiDex {
 
     private static final String CODE_CACHE_NAME = "code_cache";
 
-    private static final String CODE_CACHE_SECONDARY_FOLDER_NAME = "secondary-dexes";
+    public  static final String CODE_CACHE_SECONDARY_FOLDER_NAME = "secondary-dexes";
 
     private static final int MAX_SUPPORTED_SDK_VERSION = 20;
 
@@ -85,7 +85,7 @@ public final class MultiDex {
 
     private static final Set<File> installedApk = new HashSet<File>();
 
-    private static final boolean IS_VM_MULTIDEX_CAPABLE = isVMMultidexCapable(System.getProperty("java.vm.version"));
+    public  static final boolean IS_VM_MULTIDEX_CAPABLE = isVMMultidexCapable(System.getProperty("java.vm.version"));
 
     private static final String FIELD_NAME_PATH_LIST = "pathList";
 
@@ -137,9 +137,9 @@ public final class MultiDex {
 
     private static ArrayList<ExceptionHandler> handlers = new ArrayList<>();
 
-    private static File mainDexDir;
+    public static File mainDexDir;
 
-    static boolean optFailed = false;
+    public static boolean optFailed = false;
 
     private static String installInfo = "";
 
@@ -304,8 +304,9 @@ public final class MultiDex {
                     openDexFileMethod.invoke(null, file.getAbsolutePath(), outputPathName, 0);
                     optResult = optResult && true;
                 } catch (Exception e) {
-                    file.delete();
-                    new File(outputPathName).delete();
+                    log("MultiDex.renameInstall openDexFile fail, " + e.getMessage());
+                    log("MultiDex.renameInstall delete file " + file + " " + file.delete());
+                    log("MultiDex.renameInstall delete file " + outputPathName + " " + new File(outputPathName).delete());
                     optResult = false;
                 }
             }
@@ -353,6 +354,7 @@ public final class MultiDex {
 
             File validDexFile = new File(DexUtil.optimizedPathFor(validFile, srcDexDir));
             if (!validDexFile.exists()) {
+                log("MultiDex.copyValidFile ignore, exists valid dex file " + validDexFile);
                 continue;
             }
             log("MultiDex.copyValidFile from " + validFile + " to " + destFile + " " + DexUtil.copyFile(validFile, destFile));

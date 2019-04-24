@@ -18,7 +18,7 @@ import static android.support.multidex.MultiDex.log;
 /**
  * Tools to check odex file and remove if it was bad
  */
-class DexUtil {
+public class DexUtil {
 
     private static final String DEX_SUFFIX = ".dex";
 
@@ -35,7 +35,7 @@ class DexUtil {
      * @param element    DexPathList.Element instance for close DexFile object
      * @return true if it is valid
      */
-    static boolean verify(File dexZipFile, File dexDir, Object element) {
+    public static boolean verify(File dexZipFile, File dexDir, Object element) {
         if (testDex(dexZipFile, dexDir)) {
             return true;
         }
@@ -43,7 +43,7 @@ class DexUtil {
         return false;
     }
 
-    static void closeDexFile(File zipFile, Object element) {
+    public static void closeDexFile(File zipFile, Object element) {
         if (element == null) {
             return;
         }
@@ -66,7 +66,7 @@ class DexUtil {
      * Converts a dex/jar file path and an output directory to an
      * output file path for an associated optimized dex file.
      */
-    static String optimizedPathFor(File path, File optimizedDirectory) {
+    public static String optimizedPathFor(File path, File optimizedDirectory) {
         /*
          * Get the filename component of the path, and replace the
          * suffix with ".dex" if that's not already the suffix.
@@ -105,7 +105,7 @@ class DexUtil {
      * @param dexFile
      * @return header content of opt dex file in hex format
      */
-    static String headerOfDexFile(File dexFile) {
+    public static String headerOfDexFile(File dexFile) {
         DataInputStream dis = null;
         try {
             StringBuilder msg = new StringBuilder(40 * 2);
@@ -137,7 +137,7 @@ class DexUtil {
         }
     }
 
-    static String rawDexMD5(File dexFile) {
+    public static String rawDexMD5(File dexFile) {
         BufferedInputStream bis = null;
         try {
             bis = new BufferedInputStream(new FileInputStream(dexFile));
@@ -156,7 +156,7 @@ class DexUtil {
         }
     }
 
-    static String MD5(File zipFile) {
+    public static String MD5(File zipFile) {
         BufferedInputStream bis = null;
         try {
             bis = new BufferedInputStream(new FileInputStream(zipFile));
@@ -175,7 +175,7 @@ class DexUtil {
     }
 
 
-    static String byteArrayToHex(byte[] byteArray) {
+    public static String byteArrayToHex(byte[] byteArray) {
         char[] hexDigits = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
         char[] resultCharArray = new char[byteArray.length * 2];
         int index = 0;
@@ -186,7 +186,7 @@ class DexUtil {
         return new String(resultCharArray);
     }
 
-    static boolean testDex(File zip, File dexDir) {
+    public static boolean testDex(File zip, File dexDir) {
         String optimizedPath = optimizedPathFor(zip, dexDir);
         File optDexFile = new File(optimizedPath);
         if (!optDexFile.exists()) {
@@ -203,11 +203,11 @@ class DexUtil {
         }
     }
 
-    static boolean testDex(String zip, File dexDir) {
+    public static boolean testDex(String zip, File dexDir) {
         return testDex(new File(zip), dexDir);
     }
 
-    static void deleteInvalid(File dexDir) {
+    public static void deleteInvalid(File dexDir) {
         if (dexDir == null || !dexDir.exists()) {
             return;
         }
@@ -235,7 +235,7 @@ class DexUtil {
         }
     }
 
-    static void close(Object... obj) {
+    public static void close(Object... obj) {
         for (Object o : obj) {
             if (o instanceof Closeable) {
                 try {
@@ -251,7 +251,7 @@ class DexUtil {
      * Perform an fsync on the given FileOutputStream.  The stream at this
      * point must be flushed but not yet closed.
      */
-    static boolean sync(FileOutputStream stream) {
+    public static boolean sync(FileOutputStream stream) {
         try {
             if (stream != null) {
                 stream.getFD().sync();
@@ -264,7 +264,7 @@ class DexUtil {
 
     // copy a file from srcFile to destFile, return true if succeed, return
     // false if fail
-    static boolean copyFile(File srcFile, File destFile) {
+    public static boolean copyFile(File srcFile, File destFile) {
         boolean result;
         try {
             InputStream in = new FileInputStream(srcFile);
@@ -283,7 +283,7 @@ class DexUtil {
      * Copy data from a source stream to destFile.
      * Return true if succeed, return false if failed.
      */
-    static boolean copyToFile(InputStream inputStream, File destFile) {
+    public static boolean copyToFile(InputStream inputStream, File destFile) {
         try {
             if (destFile.exists()) {
                 destFile.delete();

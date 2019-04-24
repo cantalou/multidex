@@ -200,7 +200,7 @@ public final class MultiDexExtractor {
      * Load previously extracted secondary dex files. Should be called only while owning the lock on
      * {@link #LOCK_FILENAME}.
      */
-    private static List<ExtractedDex> loadExistingExtractions(Context context, File sourceApk, File dexDir, String prefsKeyPrefix) throws IOException {
+    public  static List<ExtractedDex> loadExistingExtractions(Context context, File sourceApk, File dexDir, String prefsKeyPrefix) throws IOException {
         MultiDex.log("loading existing secondary dex files");
         final String extractedFilePrefix = sourceApk.getName() + EXTRACTED_NAME_EXT;
         SharedPreferences multiDexPreferences = getMultiDexPreferences(context);
@@ -269,7 +269,7 @@ public final class MultiDexExtractor {
         return computedValue;
     }
 
-    private static List<ExtractedDex> performExtractions(final File sourceApk, File dexDir, final DexAsyncHandler dexAsyncHandler) throws IOException {
+    public  static List<ExtractedDex> performExtractions(final File sourceApk, File dexDir, final DexAsyncHandler dexAsyncHandler) throws IOException {
         final String extractedFilePrefix = sourceApk.getName() + EXTRACTED_NAME_EXT;
 
         // Ensure that whatever deletions happen in prepareDexDir only happen if the zip that
