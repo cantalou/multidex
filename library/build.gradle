@@ -55,6 +55,7 @@ afterEvaluate {
         if(!classFile.exists()){
             classFile = file("build/intermediates/bundles/default/classes.jar")
         }
+        file("outputs").mkdir()
         copy {
             from classFile
             into file("outputs")

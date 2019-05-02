@@ -20,10 +20,10 @@ buildscript {
         maven {
             url uri('./repo')
         }
-        jcenter()
         maven {
             url "https://plugins.gradle.org/m2/"
         }
+        jcenter()
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:3.2.0'
