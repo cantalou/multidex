@@ -73,7 +73,7 @@ public final class MultiDexExtractor {
     private static final String DEX_PREFIX = "classes";
     static final String DEX_SUFFIX = ".dex";
     private static final String EXTRACTED_NAME_EXT = ".classes";
-    static final String EXTRACTED_SUFFIX = ".zip";
+    public static String EXTRACTED_SUFFIX = ".zip";
     private static final int MAX_EXTRACT_ATTEMPTS = 5;
     private static final String PREFS_FILE = "multidex.version";
     private static final String KEY_TIME_STAMP = "timestamp";
@@ -81,6 +81,7 @@ public final class MultiDexExtractor {
     private static final String KEY_DEX_NUMBER = "dex.number";
     private static final String KEY_DEX_CRC = "dex.crc.";
     private static final String KEY_DEX_TIME = "dex.time.";
+    private static final String KEY_DEX_MD5 = "dex.md5.";
     /**
      * Size of reading buffers.
      */
@@ -94,6 +95,10 @@ public final class MultiDexExtractor {
      */
     public static boolean renameFail = false;
 
+    public static List<? extends File> load(Context context, File sourceApk, File dexDir, String prefsKeyPrefix, boolean forceReload) throws IOException {
+        return load(context,sourceApk,dexDir,prefsKeyPrefix,forceReload, null);
+    }
+
     /**
      * Extracts application secondary dexes into files in the application data
      * directory.
@@ -103,9 +108,8 @@ public final class MultiDexExtractor {
      * @throws IOException if encounters a problem while reading or writing
      *                     secondary dex files
      */
-    public static List<? extends File> load(Context context, File sourceApk, File dexDir,
-                                            String prefsKeyPrefix,
-                                            boolean forceReload, DexAsyncHandler dexAsyncHandler) throws IOException {
+    public static List<? extends File> load(Context context, File sourceApk, File dexDir, String prefsKeyPrefix, boolean forceReload,
+                                            DexAsyncHandler dexAsyncHandler) throws IOException {
         MultiDex.log("MultiDexExtractor.load(" + sourceApk.getPath() + ", " + forceReload + ", " + prefsKeyPrefix + ")");
 
         long currentCrc = getZipCrc(sourceApk);
@@ -152,11 +156,9 @@ public final class MultiDexExtractor {
                 try {
                     files = loadExistingExtractions(context, sourceApk, dexDir, prefsKeyPrefix);
                 } catch (IOException ioe) {
-                    MultiDex.log("Failed to reload existing extracted secondary dex files,"
-                            + " falling back to fresh extraction " + ioe.getMessage());
+                    MultiDex.log("Failed to reload existing extracted secondary dex files," + " falling back to fresh extraction " + ioe.getMessage());
                     files = performExtractions(sourceApk, dexDir, dexAsyncHandler);
-                    putStoredApkInfo(context, prefsKeyPrefix, getTimeStamp(sourceApk), currentCrc,
-                            files);
+                    putStoredApkInfo(context, prefsKeyPrefix, getTimeStamp(sourceApk), currentCrc, files);
                 }
             } else {
                 if (forceReload) {
@@ -165,8 +167,7 @@ public final class MultiDexExtractor {
                     MultiDex.log("Detected that extraction must be performed.");
                 }
                 files = performExtractions(sourceApk, dexDir, dexAsyncHandler);
-                putStoredApkInfo(context, prefsKeyPrefix, getTimeStamp(sourceApk), currentCrc,
-                        files);
+                putStoredApkInfo(context, prefsKeyPrefix, getTimeStamp(sourceApk), currentCrc, files);
             }
         } finally {
             if (useLock) {
@@ -199,10 +200,7 @@ public final class MultiDexExtractor {
      * Load previously extracted secondary dex files. Should be called only while owning the lock on
      * {@link #LOCK_FILENAME}.
      */
-    private static List<ExtractedDex> loadExistingExtractions(
-            Context context, File sourceApk, File dexDir,
-            String prefsKeyPrefix)
-            throws IOException {
+    public  static List<ExtractedDex> loadExistingExtractions(Context context, File sourceApk, File dexDir, String prefsKeyPrefix) throws IOException {
         MultiDex.log("loading existing secondary dex files");
         final String extractedFilePrefix = sourceApk.getName() + EXTRACTED_NAME_EXT;
         SharedPreferences multiDexPreferences = getMultiDexPreferences(context);
@@ -213,23 +211,25 @@ public final class MultiDexExtractor {
             ExtractedDex extractedFile = new ExtractedDex(dexDir, fileName);
             if (extractedFile.isFile()) {
                 extractedFile.crc = getZipCrc(extractedFile);
-                long expectedCrc = multiDexPreferences.getLong(
-                        prefsKeyPrefix + KEY_DEX_CRC + secondaryNumber, NO_VALUE);
-                long expectedModTime = multiDexPreferences.getLong(
-                        prefsKeyPrefix + KEY_DEX_TIME + secondaryNumber, NO_VALUE);
+                long expectedCrc = multiDexPreferences.getLong(prefsKeyPrefix + KEY_DEX_CRC + secondaryNumber, NO_VALUE);
+                long expectedModTime = multiDexPreferences.getLong(prefsKeyPrefix + KEY_DEX_TIME + secondaryNumber, NO_VALUE);
+                String exceptedMD5 = multiDexPreferences.getString(prefsKeyPrefix + KEY_DEX_MD5 + secondaryNumber, "");
                 long lastModified = extractedFile.lastModified();
-                if ((expectedModTime != lastModified)
-                        || (expectedCrc != extractedFile.crc) || !ZipUtil.verifyZipFile(extractedFile)) {
-                    throw new IOException("Invalid extracted dex: " + extractedFile +
-                            " (key \"" + prefsKeyPrefix + "\"), expected modification time: "
-                            + expectedModTime + ", modification time: "
-                            + lastModified + ", expected crc: "
-                            + expectedCrc + ", file crc: " + extractedFile.crc);
+                if ((expectedModTime != lastModified) || (expectedCrc != extractedFile.crc) || !ZipUtil.verifyZipFile(extractedFile)) {
+                    String msg = "Invalid extracted dex: " + extractedFile + " (key \"" + prefsKeyPrefix + "\"), expected modification time: " + expectedModTime + ", modification time: " + lastModified + ", expected crc: " + expectedCrc + ", file crc: " + extractedFile.crc;
+                    if (expectedCrc == extractedFile.crc && exceptedMD5.equals(DexUtil.MD5(extractedFile))) {
+                        MultiDex.log(msg + ", but md5 and crc equals");
+                        SharedPreferences.Editor editor = multiDexPreferences.edit();
+                        editor.putLong(prefsKeyPrefix + KEY_DEX_TIME + secondaryNumber, lastModified);
+                        editor.commit();
+                        MultiDex.log("update lastModified to " + lastModified);
+                    } else {
+                        throw new IOException(msg);
+                    }
                 }
                 files.add(extractedFile);
             } else {
-                throw new IOException("Missing extracted secondary dex file '" +
-                        extractedFile.getPath() + "'");
+                throw new IOException("Missing extracted secondary dex file '" + extractedFile.getPath() + "'");
             }
         }
         return files;
@@ -239,11 +239,16 @@ public final class MultiDexExtractor {
      * Compare current archive and crc with values stored in {@link SharedPreferences}. Should be
      * called only while owning the lock on {@link #LOCK_FILENAME}.
      */
-    private static boolean isModified(Context context, File archive, long currentCrc,
-                                      String prefsKeyPrefix) {
+    private static boolean isModified(Context context, File archive, long currentCrc, String prefsKeyPrefix) {
         SharedPreferences prefs = getMultiDexPreferences(context);
-        return (prefs.getLong(prefsKeyPrefix + KEY_TIME_STAMP, NO_VALUE) != getTimeStamp(archive))
-                || (prefs.getLong(prefsKeyPrefix + KEY_CRC, NO_VALUE) != currentCrc);
+
+        long expectTimestamp = prefs.getLong(prefsKeyPrefix + KEY_TIME_STAMP, NO_VALUE);
+        long expectCrc = prefs.getLong(prefsKeyPrefix + KEY_CRC, NO_VALUE);
+        MultiDex.log("expect timestamp " + expectTimestamp + ", crc " + expectCrc);
+
+        long actualTimeStamp = getTimeStamp(archive);
+        MultiDex.log("actual timestamp " + actualTimeStamp + ", crc " + currentCrc);
+        return (expectTimestamp != actualTimeStamp) || (expectCrc != currentCrc);
     }
 
     private static long getTimeStamp(File archive) {
@@ -264,8 +269,7 @@ public final class MultiDexExtractor {
         return computedValue;
     }
 
-    private static List<ExtractedDex> performExtractions(final File sourceApk, File dexDir, final DexAsyncHandler dexAsyncHandler)
-            throws IOException {
+    public  static List<ExtractedDex> performExtractions(final File sourceApk, File dexDir, final DexAsyncHandler dexAsyncHandler) throws IOException {
         final String extractedFilePrefix = sourceApk.getName() + EXTRACTED_NAME_EXT;
 
         // Ensure that whatever deletions happen in prepareDexDir only happen if the zip that
@@ -374,31 +378,22 @@ public final class MultiDexExtractor {
                 MultiDex.log("classes.dex  sizeInZip:" + sizeInZip + ", crcInZip " + Long.toHexString(crcInZip));
 
                 isExtractionSuccessful = sizeInApk == sizeInZip && crcInApk == crcInZip;
-                if (isExtractionSuccessful && MultiDex.optFailed && numAttempts < MAX_EXTRACT_ATTEMPTS - 1) {
-                    long testEqualsStart = System.currentTimeMillis();
-                    isExtractionSuccessful = ZipUtil.zipEntryEquals(apk, dexFile.getName(), classZip, classesEntry.getName());
-                    MultiDex.log("classes.dex content equals " + isExtractionSuccessful + ", time:" + (System.currentTimeMillis() - testEqualsStart) + "ms");
-                }
             }
 
             // Log size and crc of the extracted zip file
-            MultiDex.log("Extraction " + (isExtractionSuccessful ? "succeeded" : "failed") +
-                    " time " + (System.currentTimeMillis() - start) + "ms - length " + extractedFile.getAbsolutePath() + ": " +
-                    extractedFile.length() + " - crc: " + extractedFile.crc);
+            MultiDex.log(
+                    "Extraction " + (isExtractionSuccessful ? "succeeded" : "failed") + " time " + (System.currentTimeMillis() - start) + "ms - length " + extractedFile.getAbsolutePath() + ": " + extractedFile.length() + " - crc: " + extractedFile.crc);
             if (!isExtractionSuccessful) {
                 // Delete the extracted file
                 extractedFile.delete();
                 if (extractedFile.exists()) {
-                    MultiDex.log("Failed to delete corrupted secondary dex '" +
-                            extractedFile.getPath() + "'");
+                    MultiDex.log("Failed to delete corrupted secondary dex '" + extractedFile.getPath() + "'");
                 }
             }
             numAttempts++;
         }
         if (!isExtractionSuccessful) {
-            throw new IOException("Could not create zip file " +
-                    extractedFile.getAbsolutePath() + " for secondary dex (" +
-                    secondaryNumber + ")");
+            throw new IOException("Could not create zip file " + extractedFile.getAbsolutePath() + " for secondary dex (" + secondaryNumber + ")");
         }
     }
 
@@ -406,8 +401,7 @@ public final class MultiDexExtractor {
      * Save {@link SharedPreferences}. Should be called only while owning the lock on
      * {@link #LOCK_FILENAME}.
      */
-    private static void putStoredApkInfo(Context context, String keyPrefix, long timeStamp,
-                                         long crc, List<ExtractedDex> extractedDexes) {
+    public static void putStoredApkInfo(Context context, String keyPrefix, long timeStamp, long crc, List<ExtractedDex> extractedDexes) {
         SharedPreferences prefs = getMultiDexPreferences(context);
         SharedPreferences.Editor edit = prefs.edit();
         edit.putLong(keyPrefix + KEY_TIME_STAMP, timeStamp);
@@ -418,6 +412,7 @@ public final class MultiDexExtractor {
         for (ExtractedDex dex : extractedDexes) {
             edit.putLong(keyPrefix + KEY_DEX_CRC + extractedDexId, dex.crc);
             edit.putLong(keyPrefix + KEY_DEX_TIME + extractedDexId, dex.lastModified());
+            edit.putString(keyPrefix + KEY_DEX_MD5 + extractedDexId, DexUtil.MD5(dex));
             extractedDexId++;
         }
         /* Use commit() and not apply() as advised by the doc because we need synchronous writing of
@@ -432,9 +427,7 @@ public final class MultiDexExtractor {
      */
     private static SharedPreferences getMultiDexPreferences(Context context) {
         return context.getSharedPreferences(PREFS_FILE,
-                Build.VERSION.SDK_INT < Build.VERSION_CODES.HONEYCOMB /* Build.VERSION_CODES.HONEYCOMB */
-                        ? Context.MODE_PRIVATE
-                        : Context.MODE_PRIVATE | Context.MODE_MULTI_PROCESS /* Context.MODE_MULTI_PROCESS */);
+                Build.VERSION.SDK_INT < Build.VERSION_CODES.HONEYCOMB /* Build.VERSION_CODES.HONEYCOMB */ ? Context.MODE_PRIVATE : Context.MODE_PRIVATE | Context.MODE_MULTI_PROCESS /* Context.MODE_MULTI_PROCESS */);
     }
 
     /**
@@ -445,7 +438,7 @@ public final class MultiDexExtractor {
             @Override
             public boolean accept(File pathname) {
                 return !pathname.getName()
-                                .equals(LOCK_FILENAME);
+                        .equals(LOCK_FILENAME);
             }
         });
         if (files == null) {
@@ -465,8 +458,7 @@ public final class MultiDexExtractor {
         }
     }
 
-    private static void extract(ZipFile apk, ZipEntry dexFile, File extractTo,
-                                String extractedFilePrefix) throws IOException, FileNotFoundException {
+    private static void extract(ZipFile apk, ZipEntry dexFile, File extractTo, String extractedFilePrefix) throws IOException, FileNotFoundException {
 
         InputStream in = apk.getInputStream(dexFile);
         ZipOutputStream out;
@@ -475,8 +467,7 @@ public final class MultiDexExtractor {
         if (renameFail) {
             tmp = extractTo;
         } else {
-            tmp = File.createTempFile("tmp-" + extractedFilePrefix, EXTRACTED_SUFFIX,
-                    extractTo.getParentFile());
+            tmp = File.createTempFile("tmp-" + extractedFilePrefix, EXTRACTED_SUFFIX, extractTo.getParentFile());
         }
 
         MultiDex.log("Extracting " + tmp.getPath());
@@ -501,8 +492,7 @@ public final class MultiDexExtractor {
 
             if (!renameFail) {
                 if (!tmp.setReadOnly()) {
-                    MultiDex.log("Failed to mark readonly \"" + tmp.getAbsolutePath() +
-                            "\" (tmp of \"" + extractTo.getAbsolutePath() + "\")");
+                    MultiDex.log("Failed to mark readonly \"" + tmp.getAbsolutePath() + "\" (tmp of \"" + extractTo.getAbsolutePath() + "\")");
                 }
                 MultiDex.log("Renaming to " + extractTo.getPath());
                 if (extractTo.exists()) {
@@ -510,8 +500,7 @@ public final class MultiDexExtractor {
                 }
                 if (!tmp.renameTo(extractTo)) {
                     renameFail = true;
-                    MultiDex.log("Failed to rename \"" + tmp.getAbsolutePath() +
-                            "\" to \"" + extractTo.getAbsolutePath() + "\"");
+                    MultiDex.log("Failed to rename \"" + tmp.getAbsolutePath() + "\" to \"" + extractTo.getAbsolutePath() + "\"");
                 }
             }
         } finally {
