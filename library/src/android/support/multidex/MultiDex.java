@@ -672,7 +672,7 @@ public final class MultiDex {
             for (int i = 0, len = files.size(); i < len; i++) {
                 File zipFile = files.get(i);
                 for (int j = 0; j < LOAD_DEX_TIMES; j++) {
-                    log("makeDexElements for " + zipFile + " times " + j);
+                    log("\nmakeDexElements for " + zipFile + " times " + j);
                     String outputPathName = DexUtil.optimizedPathFor(zipFile, optimizedDirectory);
                     long optTime = System.currentTimeMillis();
                     try {
@@ -685,6 +685,7 @@ public final class MultiDex {
                         log(" ");
                         continue;
                     }
+                    log("DexFile.loadDex duration " + (System.currentTimeMillis() - optTime) + "ms");
 
                     ArrayList<File> zipFiles = new ArrayList();
                     zipFiles.add(zipFile);

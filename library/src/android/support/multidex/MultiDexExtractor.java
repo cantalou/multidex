@@ -109,6 +109,7 @@ public final class MultiDexExtractor {
      */
     public static List<? extends File> load(Context context, File sourceApk, File dexDir, String prefsKeyPrefix, boolean forceReload,
                                             DexAsyncHandler dexAsyncHandler) throws IOException {
+        long start = System.currentTimeMillis();
         MultiDex.log("MultiDexExtractor.load(" + sourceApk.getPath() + ", " + forceReload + ", " + prefsKeyPrefix + ")");
 
         long currentCrc = getZipCrc(sourceApk);
@@ -191,7 +192,7 @@ public final class MultiDexExtractor {
             throw releaseLockException;
         }
 
-        MultiDex.log("load found " + files.size() + " secondary dex files");
+        MultiDex.log("load found " + files.size() + " secondary dex files, extract duration :" + (System.currentTimeMillis()) + "ms");
         return files;
     }
 
@@ -296,6 +297,7 @@ public final class MultiDexExtractor {
                     });
                     taskResult.add(result);
                 } else {
+                    MultiDex.log("\nstart to extract zip entry " + dexFile.getName());
                     extractEntry(extractedFilePrefix, apk, secondaryNumber, dexFile, extractedFile);
                 }
                 secondaryNumber++;
