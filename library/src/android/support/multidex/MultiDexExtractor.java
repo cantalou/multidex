@@ -81,7 +81,6 @@ public final class MultiDexExtractor {
     private static final String KEY_DEX_NUMBER = "dex.number";
     private static final String KEY_DEX_CRC = "dex.crc.";
     private static final String KEY_DEX_TIME = "dex.time.";
-    private static final String KEY_DEX_MD5 = "dex.md5.";
     /**
      * Size of reading buffers.
      */
@@ -213,19 +212,10 @@ public final class MultiDexExtractor {
                 extractedFile.crc = getZipCrc(extractedFile);
                 long expectedCrc = multiDexPreferences.getLong(prefsKeyPrefix + KEY_DEX_CRC + secondaryNumber, NO_VALUE);
                 long expectedModTime = multiDexPreferences.getLong(prefsKeyPrefix + KEY_DEX_TIME + secondaryNumber, NO_VALUE);
-                String exceptedMD5 = multiDexPreferences.getString(prefsKeyPrefix + KEY_DEX_MD5 + secondaryNumber, "");
                 long lastModified = extractedFile.lastModified();
                 if ((expectedModTime != lastModified) || (expectedCrc != extractedFile.crc) || !ZipUtil.verifyZipFile(extractedFile)) {
                     String msg = "Invalid extracted dex: " + extractedFile + " (key \"" + prefsKeyPrefix + "\"), expected modification time: " + expectedModTime + ", modification time: " + lastModified + ", expected crc: " + expectedCrc + ", file crc: " + extractedFile.crc;
-                    if (expectedCrc == extractedFile.crc && exceptedMD5.equals(DexUtil.MD5(extractedFile))) {
-                        MultiDex.log(msg + ", but md5 and crc equals");
-                        SharedPreferences.Editor editor = multiDexPreferences.edit();
-                        editor.putLong(prefsKeyPrefix + KEY_DEX_TIME + secondaryNumber, lastModified);
-                        editor.commit();
-                        MultiDex.log("update lastModified to " + lastModified);
-                    } else {
-                        throw new IOException(msg);
-                    }
+                    throw new IOException(msg);
                 }
                 files.add(extractedFile);
             } else {
@@ -412,7 +402,6 @@ public final class MultiDexExtractor {
         for (ExtractedDex dex : extractedDexes) {
             edit.putLong(keyPrefix + KEY_DEX_CRC + extractedDexId, dex.crc);
             edit.putLong(keyPrefix + KEY_DEX_TIME + extractedDexId, dex.lastModified());
-            edit.putString(keyPrefix + KEY_DEX_MD5 + extractedDexId, DexUtil.MD5(dex));
             extractedDexId++;
         }
         /* Use commit() and not apply() as advised by the doc because we need synchronous writing of
