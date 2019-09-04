@@ -71,7 +71,7 @@ public final class MultiDex {
 
     private static final String CODE_CACHE_NAME = "code_cache";
 
-    public  static final String CODE_CACHE_SECONDARY_FOLDER_NAME = "secondary-dexes";
+    public static final String CODE_CACHE_SECONDARY_FOLDER_NAME = "secondary-dexes";
 
     private static final int MAX_SUPPORTED_SDK_VERSION = 20;
 
@@ -85,17 +85,11 @@ public final class MultiDex {
 
     private static final Set<File> installedApk = new HashSet<File>();
 
-    public  static final boolean IS_VM_MULTIDEX_CAPABLE = isVMMultidexCapable(System.getProperty("java.vm.version"));
+    public static final boolean IS_VM_MULTIDEX_CAPABLE = isVMMultidexCapable(System.getProperty("java.vm.version"));
 
     private static final String FIELD_NAME_PATH_LIST = "pathList";
 
     private static final int LOAD_DEX_TIMES = 3;
-
-    /**
-     * test mode: Delete cached dex file and zip file every time when install method called
-     */
-    public static boolean testMode = false;
-
 
     /**
      * Use parallel mode when core number of CPU was lg 2
@@ -295,7 +289,7 @@ public final class MultiDex {
             String secondaryFolderName = CODE_CACHE_SECONDARY_FOLDER_NAME + i;
             File srcDexDir = getDexDir(context, externalDataDir, secondaryFolderName);
             log("MultiDex.externalInstall change secondaryFolderName to '" + srcDexDir + "'");
-            List<? extends File> files = MultiDexExtractor.load(context, sourceApk, srcDexDir, NO_KEY_PREFIX, false || testMode, null);
+            List<? extends File> files = MultiDexExtractor.load(context, sourceApk, srcDexDir, NO_KEY_PREFIX, false, null);
             for (File file : files) {
                 String outputPathName = DexUtil.optimizedPathFor(file, srcDexDir);
                 try {
@@ -460,17 +454,10 @@ public final class MultiDex {
                 return false;
             }
 
-            if (!testMode) {
-                if (installedApk.contains(sourceApk) && secondaryFolderName.equals(CODE_CACHE_SECONDARY_FOLDER_NAME) && testLoadClass(loader, classNames)) {
-                    return true;
-                }
-            }
-
             if (Build.VERSION.SDK_INT > MAX_SUPPORTED_SDK_VERSION) {
                 log("MultiDex is not guaranteed to work in SDK version " + Build.VERSION.SDK_INT + ": SDK version higher than " + MAX_SUPPORTED_SDK_VERSION + " should be backed by " + "runtime with built-in multidex capabilty but it's not the " + "case here: java.vm.version=\"" + System.getProperty(
                         "java.vm.version") + "\"");
             }
-
 
             if (loader == null) {
                 // Note, the context class loader is null when running Robolectric tests.
@@ -489,22 +476,6 @@ public final class MultiDex {
                 mainDexDir = dexDir;
             }
 
-            if (testMode && secondaryFolderName == CODE_CACHE_SECONDARY_FOLDER_NAME) {
-                return false;
-            }
-
-            if (testMode) {
-                //Delete cached classesN.zip and classesN.dex
-                long start = System.currentTimeMillis();
-                File[] files = dexDir.listFiles();
-                if (files != null) {
-                    for (File file : files) {
-                        file.delete();
-                    }
-                }
-                log("Delete cached file  classesN.zip and classesN.dex " + (System.currentTimeMillis() - start) + "ms");
-            }
-
             if ((mode & MODE_AUTO) == MODE_AUTO) {
                 int count = Runtime.getRuntime()
                         .availableProcessors();
@@ -518,11 +489,11 @@ public final class MultiDex {
             List<? extends File> files = null;
             log("Use mode " + Integer.toBinaryString(mode) + " to load extract and dex opt");
             if (mode == MODE_SERIAL) {
-                files = MultiDexExtractor.load(mainContext, sourceApk, dexDir, prefsKeyPrefix, false || testMode, null);
+                files = MultiDexExtractor.load(mainContext, sourceApk, dexDir, prefsKeyPrefix, false, null);
                 installSecondaryDexes(loader, dexDir, files);
             } else if ((mode & MODE_EXTRACT_PARALLEL) == MODE_EXTRACT_PARALLEL) {
                 final int finalMode = mode;
-                files = MultiDexExtractor.load(mainContext, sourceApk, dexDir, prefsKeyPrefix, false || testMode, new MultiDexExtractor.DexAsyncHandler() {
+                files = MultiDexExtractor.load(mainContext, sourceApk, dexDir, prefsKeyPrefix, false, new MultiDexExtractor.DexAsyncHandler() {
                     @Override
                     public void handle(File dexFile) throws Exception {
                         if ((finalMode & MODE_DEX_OPT_PARALLEL) == MODE_DEX_OPT_PARALLEL) {
