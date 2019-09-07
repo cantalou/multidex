@@ -192,7 +192,7 @@ public final class MultiDexExtractor {
             throw releaseLockException;
         }
 
-        MultiDex.log("load found " + files.size() + " secondary dex files, extract duration :" + (System.currentTimeMillis()) + "ms");
+        MultiDex.log("load found " + files.size() + " secondary dex files, extract duration :" + (System.currentTimeMillis() - start) + "ms");
         return files;
     }
 
@@ -297,7 +297,8 @@ public final class MultiDexExtractor {
                     });
                     taskResult.add(result);
                 } else {
-                    MultiDex.log("\nstart to extract zip entry " + dexFile.getName());
+                    MultiDex.log(" ");
+                    MultiDex.log("start to extract zip entry " + dexFile.getName());
                     extractEntry(extractedFilePrefix, apk, secondaryNumber, dexFile, extractedFile);
                 }
                 secondaryNumber++;
