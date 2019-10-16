@@ -27,7 +27,7 @@ Add below code in build.gradle of your app project and nothing to do with java c
 ```   
 
 ### Performance  
-There three dex in test apk. Every dex contains about 40000+ methods.  
+There three classesN.dex in test apk and every dex contains about 40000+ methods.  
 
 | Device               | Version |   Before(s)  |  After(s) |
 |---|---|---|---|
