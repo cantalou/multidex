@@ -4,6 +4,7 @@ apply plugin: 'com.android.application'
 
 android {
     compileSdkVersion _compileSdkVersion
+    buildToolsVersion _buildToolVersion
 
     defaultConfig {
         applicationId "com.cantalou.divider.app"
@@ -13,7 +14,7 @@ android {
         versionName "1.0"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
         multiDexEnabled true
-//        multiDexKeepProguard = file("multidex-config.pro")
+        multiDexKeepProguard = file("multidex-config.pro")
     }
 
     signingConfigs {
@@ -34,9 +35,9 @@ android {
     }
 
     dexOptions {
-        jumboMode = true
+        jumboMode = false
         preDexLibraries = false
-        additionalParameters("--set-max-idx-number=52000", "--minimal-main-dex")
+        additionalParameters("--set-max-idx-number=42000", "--minimal-main-dex")
     }
 
     buildTypes {
@@ -50,30 +51,68 @@ android {
         sourceCompatibility 1.7
         targetCompatibility 1.7
     }
+    packagingOptions {
+        exclude 'META-INF/*'
+    }
 }
 
 dependencies {
-    implementation fileTree(dir: 'libs', include: ['*.jar'])
-    implementation 'io.reactivex.rxjava2:rxjava:2.1.4'
-    implementation 'com.android.support:appcompat-v7:23.+'
-    implementation 'com.android.support.constraint:constraint-layout:1.0.2'
-    implementation 'com.google.dagger:dagger:2.2'
-    implementation 'com.squareup.retrofit2:retrofit:2.0.0-beta4'
-    implementation 'com.squareup.retrofit2:converter-gson:2.0.0-beta4'
-    implementation 'com.google.code.gson:gson:2.6.2'
-    implementation 'commons-io:commons-io:2.0.1'
-    implementation "com.google.guava:guava:17.0"
-    implementation "org.ow2.asm:asm-debug-all:5.0.1"
-    implementation "org.jacoco:org.jacoco.core:0.7.4.201502262128"
-    implementation "org.antlr:antlr:3.5.2"
-    implementation 'com.github.bumptech.glide:glide:3.8.0'
-    implementation 'com.github.bumptech.glide:volley-integration:1.2.2'
-    implementation 'com.mcxiaoke.volley:library:1.0.5'
-    implementation 'com.squareup.okhttp:okhttp:2.4.0'
-    implementation 'com.squareup.picasso:picasso:2.5.2'
-    implementation "com.squareup.retrofit:retrofit:1.4.1"
+    compile fileTree(dir: 'libs', include: ['*.jar'])
+    compile 'io.reactivex.rxjava2:rxjava:2.1.4'
+    compile 'com.android.support:design:27.1.1'
+    compile 'com.android.support.constraint:constraint-layout:1.0.2'
+    compile 'com.google.dagger:dagger:2.2'
+    compile 'com.squareup.retrofit2:retrofit:2.0.0-beta4'
+    compile 'com.squareup.retrofit2:converter-gson:2.0.0-beta4'
+    compile 'com.google.code.gson:gson:2.6.2'
 
-    implementation project(":android-support-multidex")
+    compile "com.google.guava:guava:17.0"
+    compile "org.ow2.asm:asm-debug-all:5.0.1"
+    compile "org.jacoco:org.jacoco.core:0.7.4.201502262128"
+    compile "org.antlr:antlr:3.5.2"
+    compile 'com.github.bumptech.glide:glide:3.8.0'
+    compile 'com.github.bumptech.glide:volley-integration:1.2.2'
+    compile 'com.mcxiaoke.volley:library:1.0.5'
+    compile 'com.squareup.okhttp:okhttp:2.4.0'
+    compile 'com.squareup.picasso:picasso:2.5.2'
+    compile "com.squareup.retrofit:retrofit:1.4.1"
+    compile 'com.google.protobuf:protobuf-java:3.1.0'
+    compile 'com.google.protobuf:protoc:3.1.0'
+
+    compile 'com.fasterxml.jackson.core:jackson-annotations:2.9.5'
+    compile 'com.fasterxml.jackson.core:jackson-core:2.9.5'
+    compile 'com.fasterxml.jackson.core:jackson-databind:2.9.5'
+
+    compile 'org.apache.httpcomponents:httpclient:4.5.10'
+
+    compile 'commons-io:commons-io:2.0.1'
+    compile group: 'commons-collections', name: 'commons-collections', version: '3.2.2'
+    compile group: 'commons-lang', name: 'commons-lang', version: '2.6'
+    compile group: 'org.jsoup', name: 'jsoup', version: '1.12.1'
+
+    compile 'com.facebook.fresco:fresco:0.12.0'
+    compile 'com.facebook.fresco:animated-base-support:0.12.0'
+
+    compile 'com.facebook.fresco:animated-gif:0.12.0'
+    compile 'com.facebook.fresco:animated-webp:0.12.0'
+    compile 'com.facebook.fresco:webpsupport:0.12.0'
+
+    compile "com.squareup.picasso:picasso:2.5.2"
+    compile "com.googlecode.mp4parser:isoparser:1.0.6"
+
+    compile group: 'org.springframework', name: 'spring-web', version: '2.0'
+    compile group: 'org.hibernate', name: 'hibernate', version: '3.0rc1'
+    //compile group: 'org.glassfish.jaxb', name: 'jaxb-runtime', version: '2.2.11'
+    compile 'cn.trinea.android.common:trinea-android-common:4.2.15'
+    compile 'com.google.zxing:core:3.3.0'
+
+    compile('com.android.support.test.espresso:espresso-core:2.2.2', {
+        exclude group: 'com.android.support', module: 'support-annotations'
+    })
+
+    compile 'junit:junit:4.12'
+
+    compile project(":android-support-multidex")
 }
 
 configurations.all {

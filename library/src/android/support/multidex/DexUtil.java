@@ -22,6 +22,8 @@ public class DexUtil {
 
     private static final String DEX_SUFFIX = ".dex";
 
+    private static final String RAW_DEX_SUFFIX = ".raw.dex";
+
     /**
      * verify the optimized dex file.<br/>
      * In some 4.x device, we found that dexopt generates bad odex occasionally which only contains header(40 bytes) and dex file content.
@@ -80,7 +82,9 @@ public class DexUtil {
          * files in /data/dalvik-cache.
          */
         String fileName = path.getName();
-        if (!fileName.endsWith(DEX_SUFFIX)) {
+        if (fileName.endsWith(RAW_DEX_SUFFIX)) {
+            fileName = fileName.replace(RAW_DEX_SUFFIX,"") + DEX_SUFFIX;
+        } else if (!fileName.endsWith(DEX_SUFFIX)) {
             int lastDot = fileName.lastIndexOf(".");
             if (lastDot < 0) {
                 fileName += DEX_SUFFIX;

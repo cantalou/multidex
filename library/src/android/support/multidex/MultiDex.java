@@ -20,7 +20,6 @@ import android.app.Application;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.os.Build;
-import android.os.Environment;
 import android.support.multidex.handler.exception.ExceptionHandler;
 import android.support.multidex.handler.exception.impl.NoSpaceLeftOnDeviceHandler;
 import android.support.multidex.handler.exception.impl.ReadOnlySystemHandle;
@@ -29,9 +28,7 @@ import android.util.Log;
 import android.util.SparseArray;
 
 import java.io.File;
-import java.io.FilenameFilter;
 import java.io.IOException;
-import java.io.RandomAccessFile;
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -89,8 +86,6 @@ public final class MultiDex {
 
     private static final String FIELD_NAME_PATH_LIST = "pathList";
 
-    private static final int LOAD_DEX_TIMES = 1;
-
     /**
      * Use parallel mode when core number of CPU was lg 2
      */
@@ -116,6 +111,12 @@ public final class MultiDex {
      */
     public static final int MODE_PARALLEL = MODE_EXTRACT_PARALLEL | MODE_DEX_OPT_PARALLEL;
 
+    /**
+     * zipMode true will extract classesN.dex from apk file into classesN.zip
+     * zipMode false will extract classesN.dex from apk file into classesN.dex
+     */
+    public static boolean zipMode = false;
+
     public interface Logger {
         void log(String msg);
     }
@@ -132,10 +133,6 @@ public final class MultiDex {
     private static ArrayList<ExceptionHandler> handlers = new ArrayList<>();
 
     public static File mainDexDir;
-
-    public static boolean optFailed = false;
-
-    private static String installInfo = "";
 
     static {
         handlers.add(new ReadOnlySystemHandle());
@@ -170,7 +167,8 @@ public final class MultiDex {
      * @throws RuntimeException if an error occurred preventing the classloader
      *                          extension.
      */
-    public synchronized static void install(Context context, int mode, String... classNames) {
+    public synchronized static void install(Context context, int mode) {
+        long start = System.currentTimeMillis();
         log("Installing application");
         if (IS_VM_MULTIDEX_CAPABLE) {
             log("VM has multidex support, MultiDex support library is disabled.");
@@ -190,7 +188,7 @@ public final class MultiDex {
         File sourceApk = new File(applicationInfo.sourceDir);
         File dataDir = new File(applicationInfo.dataDir);
         try {
-            doInstallation(context, sourceApk, dataDir, CODE_CACHE_SECONDARY_FOLDER_NAME, NO_KEY_PREFIX, mode, classNames);
+            doInstallation(context, sourceApk, dataDir, CODE_CACHE_SECONDARY_FOLDER_NAME, NO_KEY_PREFIX, mode);
         } catch (Exception e) {
             String msg = Log.getStackTraceString(e);
             log("MultiDex installation failure, " + msg);
@@ -202,8 +200,7 @@ public final class MultiDex {
             }
             if (handled) {
                 try {
-                    doInstallation(context, sourceApk, dataDir, CODE_CACHE_SECONDARY_FOLDER_NAME, NO_KEY_PREFIX, mode,
-                            classNames);
+                    doInstallation(context, sourceApk, dataDir, CODE_CACHE_SECONDARY_FOLDER_NAME, NO_KEY_PREFIX, mode);
                 } catch (Exception e1) {
                     throw new RuntimeException("MultiDex retry installation failed (" + msg + ").", e1);
                 }
@@ -211,7 +208,7 @@ public final class MultiDex {
                 throw new RuntimeException("MultiDex installation failed (" + msg + ").", e);
             }
         }
-        log("install done");
+        log("install done time " + (System.currentTimeMillis() - start) + "ms");
     }
 
     public static void installWithExceptionHandle(Context context, Callable runnable) {
@@ -264,8 +261,7 @@ public final class MultiDex {
      * @param prefsKeyPrefix      prefix of all stored preference keys.
      * @param mode
      */
-    private static boolean doInstallation(Context mainContext, File sourceApk, File dataDir, String secondaryFolderName, String prefsKeyPrefix, int mode,
-                                          final String... classNames) throws IOException, IllegalArgumentException, IllegalAccessException, NoSuchFieldException, InvocationTargetException, NoSuchMethodException, ClassNotFoundException, InstantiationException {
+    private static boolean doInstallation(Context mainContext, File sourceApk, File dataDir, String secondaryFolderName, String prefsKeyPrefix, int mode) throws IOException, IllegalArgumentException, IllegalAccessException, NoSuchFieldException, InvocationTargetException, NoSuchMethodException, ClassNotFoundException, InstantiationException {
         synchronized (installedApk) {
 
             /* The patched class loader is expected to be a descendant of
@@ -308,14 +304,10 @@ public final class MultiDex {
             }
 
             if ((mode & MODE_AUTO) == MODE_AUTO) {
-                int count = Runtime.getRuntime()
-                        .availableProcessors();
+                int count = Runtime.getRuntime().availableProcessors();
                 mode = count > 1 ? MODE_PARALLEL : MODE_SERIAL;
                 log("CUP core number is " + count + ", choose mode " + (count > 1 ? "MODE_PARALLEL" : "MODE_SERIAL"));
             }
-
-            //force serial mode
-            mode = MODE_SERIAL;
 
             List<? extends File> files = null;
             log("Use mode " + Integer.toBinaryString(mode) + " to load extract and dex opt");
@@ -329,33 +321,20 @@ public final class MultiDex {
                     public void handle(File dexFile) throws Exception {
                         if ((finalMode & MODE_DEX_OPT_PARALLEL) == MODE_DEX_OPT_PARALLEL) {
                             long start = System.currentTimeMillis();
-                            new DexClassLoader(dexFile.getAbsolutePath(), dexDir.getAbsolutePath(), "", loader);
-                            log("Dex opt success " + (System.currentTimeMillis() - start) + "ms " + dexFile);
-                        } else {
-                            synchronized (MultiDex.class) {
-                                long start = System.currentTimeMillis();
-                                new DexClassLoader(dexFile.getAbsolutePath(), dexDir.getAbsolutePath(), "", loader);
-                                log("Dex opt success " + (System.currentTimeMillis() - start) + "ms " + dexFile);
-                            }
+                            tryLoadDexFile(dexDir, dexFile).close();
+                            log("Parallel dex opt success " + (System.currentTimeMillis() - start) + "ms " + dexFile);
                         }
                     }
                 });
                 installSecondaryDexes(loader, dexDir, files);
             }
 
-            if (!testLoadClass(loader, classNames)) {
-                log("Failed to install extracted secondary dex files, retrying with forced extraction");
-                files = MultiDexExtractor.load(mainContext, sourceApk, dexDir, prefsKeyPrefix, true, null);
-                installSecondaryDexes(loader, dexDir, files);
-            }
-
-            if (testLoadClass(loader, classNames) && testVerifyDex(files, dexDir)) {
+            if (testVerifyDex(files, dexDir)) {
                 if (secondaryFolderName.equals(CODE_CACHE_SECONDARY_FOLDER_NAME)) {
                     installedApk.add(sourceApk);
                 }
                 return true;
             }
-
             return false;
         }
     }
@@ -372,22 +351,6 @@ public final class MultiDex {
         }
 
         return true;
-    }
-
-    private static boolean testLoadClass(ClassLoader loader, String[] classNames) {
-        if (classNames == null || classNames.length == 0) {
-            return true;
-        }
-        try {
-            for (String className : classNames) {
-                loader.loadClass(className);
-            }
-            return true;
-        } catch (ClassNotFoundException e) {
-            MultiDex.log("testDexOpt load class from " + loader);
-            MultiDex.log("", e);
-            return false;
-        }
     }
 
     private static ApplicationInfo getApplicationInfo(Context context) {
@@ -611,7 +574,7 @@ public final class MultiDex {
     private static final class V19 {
 
         private static void install(ClassLoader loader, List<? extends File> additionalClassPathEntries,
-                                    File optimizedDirectory) throws IllegalArgumentException, IllegalAccessException, NoSuchFieldException, InvocationTargetException, NoSuchMethodException, IOException {
+                                    File optimizedDirectory) throws IllegalArgumentException, IllegalAccessException, NoSuchFieldException, InvocationTargetException, NoSuchMethodException, IOException, InstantiationException {
             /* The patched class loader is expected to be a descendant of
              * dalvik.system.BaseDexClassLoader. We modify its
              * dalvik.system.DexPathList pathList field to append additional DEX
@@ -659,7 +622,7 @@ public final class MultiDex {
          * {@code private static final dalvik.system.DexPathList#makeDexElements}.
          */
         private static Object[] makeDexElements(Object dexPathList, ArrayList<? extends File> files, File optimizedDirectory,
-                                                ArrayList<IOException> suppressedExceptions) throws IllegalAccessException, InvocationTargetException, NoSuchMethodException {
+                                                ArrayList<IOException> suppressedExceptions) throws IllegalAccessException, InvocationTargetException, NoSuchMethodException, IOException, InstantiationException {
             Method makeDexElements;
             try {
                 makeDexElements = findMethod(dexPathList, "makeDexElements", ArrayList.class, File.class, ArrayList.class);
@@ -667,60 +630,50 @@ public final class MultiDex {
                 log("makeDexElements(ArrayList,File,ArrayList) not found in " + dexPathList, e);
                 makeDexElements = findMethod(dexPathList, "makeDexElements", List.class, File.class, List.class);
             }
-            IOException lastException = null;
             Object[] result = new Object[files.size()];
             for (int i = 0, len = files.size(); i < len; i++) {
                 File zipFile = files.get(i);
-                for (int j = 0; j < LOAD_DEX_TIMES; j++) {
-                    log(" ");
-                    log("makeDexElements for " + zipFile + " times " + j);
-                    String outputPathName = DexUtil.optimizedPathFor(zipFile, optimizedDirectory);
-                    long optTime = System.currentTimeMillis();
-                    try {
-                        DexFile.loadDex(zipFile.getCanonicalPath(), outputPathName, 0);
-                    } catch (IOException e) {
-                        log("DexFile.loadDex outputPathName " + outputPathName);
-                        log("DexFile.loadDex error duration " + (System.currentTimeMillis() - optTime) + "ms");
-                        log("DexFile.loadDex " + e.getMessage());
-                        log("DexFile.loadDex delete file " + new File(outputPathName).delete());
-                        log(" ");
-                        continue;
-                    }
-                    log("DexFile.loadDex duration " + (System.currentTimeMillis() - optTime) + "ms");
+                log(" ");
+                log("makeDexElements for " + zipFile);
 
+                DexFile dexFile = tryLoadDexFile(optimizedDirectory, zipFile);
+                if (zipMode) {
+                    dexFile.close();
                     ArrayList<File> zipFiles = new ArrayList();
                     zipFiles.add(zipFile);
-                    ArrayList<IOException> suppressedExceptions_ = new ArrayList<>();
-                    Object[] dexElements = (Object[]) makeDexElements.invoke(dexPathList, zipFiles, optimizedDirectory, suppressedExceptions_);
-
-                    if (!suppressedExceptions_.isEmpty()) {
-                        lastException = suppressedExceptions_.get(0);
-                        log("makeDexElements " + lastException.getMessage());
-                    }
-
-                    if (dexElements != null && dexElements.length > 0) {
-                        result[i] = dexElements[0];
-                    }
-
-                    if (DexUtil.verify(zipFile, optimizedDirectory, result[i])) {
-                        lastException = null;
-                        break;
-                    }
-                    log(" ");
+                    Object[] dexElements = (Object[]) makeDexElements.invoke(dexPathList, zipFiles, optimizedDirectory, new ArrayList<>());
+                    result[i] = dexElements[0];
+                } else {
+                    ArrayList<File> zipFiles = new ArrayList();
+                    zipFiles.add(optimizedDirectory);
+                    Object[] dexElements = (Object[]) makeDexElements.invoke(dexPathList, zipFiles, optimizedDirectory, new ArrayList<>());
+                    //File file, boolean isDirectory, File zip, DexFile dexFile
+                    Constructor constructor = dexElements[0].getClass().getConstructor(new Class[]{File.class, boolean.class, File.class, DexFile.class});
+                    constructor.setAccessible(true);
+                    dexElements[0] = constructor.newInstance(null, false, null, dexFile);
+                    result[i] = dexElements[0];
                 }
             }
-            if (lastException != null) {
-                suppressedExceptions.add(lastException);
-            }
-
-            ArrayList notNullResult = new ArrayList();
-            for (Object o : result) {
-                if (o != null) {
-                    notNullResult.add(o);
-                }
-            }
-            return notNullResult.toArray();
+            return result;
         }
+    }
+
+    private static DexFile tryLoadDexFile(File optimizedDirectory, File zipFile) throws IOException {
+        DexFile dexFile;
+        String outputPathName = DexUtil.optimizedPathFor(zipFile, optimizedDirectory);
+        long optTime = System.currentTimeMillis();
+        try {
+            dexFile = DexFile.loadDex(zipFile.getCanonicalPath(), outputPathName, 0);
+            log("DexFile.loadDex success duration " + (System.currentTimeMillis() - optTime) + "ms");
+        } catch (IOException e) {
+            log("DexFile.loadDex outputPathName " + outputPathName);
+            log("DexFile.loadDex error duration " + (System.currentTimeMillis() - optTime) + "ms");
+            log("DexFile.loadDex " + e.getMessage());
+            log("DexFile.loadDex delete file " + new File(outputPathName).delete());
+            log(" ");
+            throw e;
+        }
+        return dexFile;
     }
 
     /**
@@ -749,7 +702,7 @@ public final class MultiDex {
             public Object newInstance(File file, DexFile dex)
                     throws IllegalArgumentException, InstantiationException,
                     IllegalAccessException, InvocationTargetException, IOException {
-                return elementConstructor.newInstance(file, new ZipFile(file), dex);
+                return elementConstructor.newInstance(null, null, dex);
             }
         }
 
@@ -771,7 +724,7 @@ public final class MultiDex {
             public Object newInstance(File file, DexFile dex)
                     throws IllegalArgumentException, InstantiationException,
                     IllegalAccessException, InvocationTargetException {
-                return elementConstructor.newInstance(file, file, dex);
+                return elementConstructor.newInstance(null, null, dex);
             }
         }
 
@@ -793,12 +746,10 @@ public final class MultiDex {
             public Object newInstance(File file, DexFile dex)
                     throws IllegalArgumentException, InstantiationException,
                     IllegalAccessException, InvocationTargetException {
-                return elementConstructor.newInstance(file, Boolean.FALSE, file, dex);
+                return elementConstructor.newInstance(null, Boolean.FALSE, null, dex);
             }
         }
 
-        private static final int EXTRACTED_SUFFIX_LENGTH =
-                MultiDexExtractor.EXTRACTED_SUFFIX.length();
         private final ElementConstructor elementConstructor;
 
         static void install(ClassLoader loader,
@@ -817,7 +768,8 @@ public final class MultiDex {
             try {
                 elements = new V14().makeDexElements(additionalClassPathEntries);
             } catch (Exception e) {
-                log("V14().makeDexElements error " + e);
+                log("V14().makeDexElements error ");
+                log(Log.getStackTraceString(e));
                 elements = makeDexElements(dexPathList, additionalClassPathEntries, dexDir);
             }
             try {
@@ -857,7 +809,7 @@ public final class MultiDex {
             Object[] elements = new Object[files.size()];
             for (int i = 0; i < elements.length; i++) {
                 File file = files.get(i);
-                elements[i] = elementConstructor.newInstance(file, DexFile.loadDex(file.getPath(), optimizedPathFor(file), 0));
+                elements[i] = elementConstructor.newInstance(null, DexFile.loadDex(file.getPath(), optimizedPathFor(file), 0));
             }
             return elements;
         }
@@ -867,7 +819,7 @@ public final class MultiDex {
          * {@code private static final dalvik.system.DexPathList#makeDexElements}.
          */
         private static Object[] makeDexElements(Object dexPathList, List<? extends File> files,
-                                                File optimizedDirectory) throws IllegalAccessException, InvocationTargetException, NoSuchMethodException {
+                                                File optimizedDirectory) throws IllegalAccessException, InvocationTargetException, NoSuchMethodException, IOException, InstantiationException {
             Method makeDexElements;
             try {
                 makeDexElements = findMethod(dexPathList, "makeDexElements", ArrayList.class, File.class);
@@ -878,44 +830,28 @@ public final class MultiDex {
             Object[] result = new Object[files.size()];
             for (int i = 0, len = files.size(); i < len; i++) {
                 File zipFile = files.get(i);
-                for (int j = 0; j < LOAD_DEX_TIMES; j++) {
-                    log("makeDexElements for " + zipFile + " times " + j);
-                    String outputPathName = DexUtil.optimizedPathFor(zipFile, optimizedDirectory);
-                    long optTime = System.currentTimeMillis();
-                    try {
-                        try {
-                            DexFile.loadDex(zipFile.getCanonicalPath(), outputPathName, 0);
-                        } catch (IllegalArgumentException e) {
-                            DexFile.loadDex(zipFile.getCanonicalPath(), null, 0);
-                        }
-                    } catch (IOException e) {
-                        log("DexFile.loadDex outputPathName " + outputPathName);
-                        log("DexFile.loadDex error duration " + (System.currentTimeMillis() - optTime) + "ms");
-                        log("DexFile.loadDex " + e.getMessage());
-                        log("DexFile.loadDex delete file " + new File(outputPathName).delete());
-                        log(" ");
-                        continue;
-                    }
+                log("makeDexElements for " + zipFile);
 
+                DexFile dexFile = tryLoadDexFile(optimizedDirectory, zipFile);
+
+                if (zipMode) {
+                    dexFile.close();
                     ArrayList<File> zipFiles = new ArrayList();
                     zipFiles.add(zipFile);
                     Object[] dexElements = (Object[]) makeDexElements.invoke(dexPathList, zipFiles, optimizedDirectory);
-                    if (dexElements != null && dexElements.length > 0) {
-                        result[i] = dexElements[0];
-                    }
-
-                    if (DexUtil.verify(zipFile, optimizedDirectory, result[i])) {
-                        break;
-                    }
+                    result[i] = dexElements[0];
+                } else {
+                    ArrayList<File> zipFiles = new ArrayList();
+                    zipFiles.add(optimizedDirectory);
+                    Object[] dexElements = (Object[]) makeDexElements.invoke(dexPathList, zipFiles, optimizedDirectory, new ArrayList<>());
+                    //File file, boolean isDirectory, File zip, DexFile dexFile
+                    Constructor constructor = dexElements[0].getClass().getConstructor(new Class[]{File.class, boolean.class, File.class, DexFile.class});
+                    constructor.setAccessible(true);
+                    dexElements[0] = constructor.newInstance(zipFile, false, zipFile, dexFile);
+                    result[i] = dexElements[0];
                 }
             }
-            ArrayList notNullResult = new ArrayList();
-            for (Object o : result) {
-                if (o != null) {
-                    notNullResult.add(o);
-                }
-            }
-            return notNullResult.toArray();
+            return result;
         }
 
         /**
@@ -926,12 +862,7 @@ public final class MultiDex {
             // Any reproducible name ending with ".dex" should do but lets keep the same name
             // as DexPathList.optimizedPathFor
             File optimizedDirectory = path.getParentFile();
-            String fileName = path.getName();
-            String optimizedFileName =
-                    fileName.substring(0, fileName.length() - EXTRACTED_SUFFIX_LENGTH)
-                            + MultiDexExtractor.DEX_SUFFIX;
-            File result = new File(optimizedDirectory, optimizedFileName);
-            return result.getPath();
+            return DexUtil.optimizedPathFor(path, optimizedDirectory);
         }
     }
 
@@ -993,10 +924,5 @@ public final class MultiDex {
         } else {
             Log.e(TAG, msg, throwable);
         }
-    }
-
-    @Override
-    public String toString() {
-        return installInfo;
     }
 }

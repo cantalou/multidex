@@ -60,7 +60,6 @@ final class ZipUtil {
         RandomAccessFile raf = new RandomAccessFile(apk, "r");
         try {
             CentralDirectory dir = findCentralDirectory(raf);
-
             return computeCrcOfCentralDir(raf, dir);
         } finally {
             raf.close();
@@ -132,6 +131,13 @@ final class ZipUtil {
      * Returns whether the file is a valid zip file.
      */
     static boolean verifyZipFile(File file) {
+
+        String name = file.getName();
+        if (name.equals(".dex")) {
+            MultiDex.log("verifyZipFile check for " + file + " , just return true");
+            return true;
+        }
+
         try {
             ZipFile zipFile = new ZipFile(file);
             try {
