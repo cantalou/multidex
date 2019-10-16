@@ -6,7 +6,7 @@ A library for speeding up app launch at the first time when you used google mult
 The default implement of google MultiDex dex was serialization work.  
 1. Extract every classesN.dex from apk  
 2. Fork sub process for doing dex opt for every classesN.dex file
-
+![](https://raw.githubusercontent.com/cantalou/multidex/master/doc/SerialExtractDexopt.jpg)
 
 ### Feature
  
