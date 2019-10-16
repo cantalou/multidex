@@ -64,4 +64,5 @@ afterEvaluate {
         }
     }
 }
+apply from: 'publish.gradle'
 

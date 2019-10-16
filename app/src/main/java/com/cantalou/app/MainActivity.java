@@ -5,6 +5,7 @@ import android.os.Bundle;
 import android.support.multidex.MultiDex;
 import android.util.Log;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.TextView;
 
 import java.io.File;
@@ -17,6 +18,11 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+        Runtime runtime = Runtime.getRuntime();
+        String deviceInfo = "core:" + runtime.availableProcessors() + ",maxHeap:" + runtime.maxMemory() / 1024 / 1024 + "M";
+        ((TextView) findViewById(R.id.device_info)).setText(deviceInfo);
 
         textView = ((TextView) findViewById(R.id.time));
 
@@ -81,5 +87,11 @@ public class MainActivity extends Activity {
                 }
             });
         }
+    }
+
+    @Override
+    protected void onDestroy() {
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        super.onDestroy();
     }
 }
