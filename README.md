@@ -27,10 +27,11 @@ Add below code in build.gradle of your app project and nothing to do with java c
 ```   
 
 ### Performance  
-There three dex in test apk. Every dex contains about 40000+ methods.
+There three dex in test apk. Every dex contains about 40000+ methods.  
+
 | Device               | Version |   Before(s)  |  After(s) |
 |---|---|---|---|
-| LenovoA3800          |  4.4.2  |    14.495    |   7.455   |  
+| LenovoA3800          |  4.4.2  |    14.495    |   7.455   |
 | Honor H30            |  4.2.2  |    9.173     |   3.221   |
 | Xiaomi HM NOTE 1S    |  4.4.4  |    11.716    |   5.171   |
 | Genymotion(run in pc)|  4.1.1  |    2.288     |   0.512   |
