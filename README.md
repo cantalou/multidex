@@ -10,6 +10,6 @@ The default implement of google MultiDex dex was serialization work.
 
 ### Feature
  
-There are five way ,we could chose to optimize ```MultiDex.install()```.    
-
-- MODE_EXTRACT_PARALLEL
+We can split task and work parallel in different thread to optimize ```MultiDex.install()```.   
+<img src="https://raw.githubusercontent.com/cantalou/multidex/master/doc/ParallelExtractDexopt.jpg" width = "1000" height = "500" div align=left />  
+   
